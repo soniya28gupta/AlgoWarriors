@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle, BrainCircuit, Apple, HeartPulse, Moon, Stethoscope } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Mock trend data
 const generateTrendData = (currentRisk) => {
   return Array.from({ length: 6 }).map((_, i) => ({
     month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'][i],
@@ -70,7 +69,7 @@ const CircularProgress = ({ percentage, color }) => {
 };
 
 export default function ResultDashboard({ result, onReset }) {
-  const { risk_percentage, risk_level, reasons, recommendations } = result;
+  const { risk_percentage, risk_level, care_plan } = result;
 
   const colorMap = {
     Low: '#22c55e',    // Green
@@ -87,17 +86,41 @@ export default function ResultDashboard({ result, onReset }) {
   const color = colorMap[risk_level] || colorMap.Low;
   const trendData = generateTrendData(risk_percentage);
 
+  // Animation variants for the AI text
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.6 // Sequence paragraphs like AI typing
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.8 } }
+  };
+
+  // Structured categories 
+  const guidanceCards = care_plan ? [
+    { title: "Dietary Adjustments", text: care_plan.diet, icon: Apple, color: "text-green-400", border: "border-green-500/30" },
+    { title: "Exercise Protocol", text: care_plan.exercise, icon: HeartPulse, color: "text-rose-400", border: "border-rose-500/30" },
+    { title: "Lifestyle Habit Changes", text: care_plan.lifestyle, icon: Moon, color: "text-indigo-400", border: "border-indigo-500/30" },
+    { title: "Medical Consultation", text: care_plan.medical, icon: Stethoscope, color: "text-blue-400", border: "border-blue-500/30" }
+  ] : [];
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 1.05 }}
       transition={{ duration: 0.4 }}
-      className="max-w-4xl mx-auto space-y-6"
+      className="max-w-5xl mx-auto space-y-6"
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Main Score Card */}
-        <div className="col-span-1 md:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group">
+        <div className="col-span-1 xl:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
           <div className="flex flex-col md:flex-row items-center justify-between z-10 relative">
             <div className="space-y-4 mb-6 md:mb-0">
@@ -109,8 +132,8 @@ export default function ResultDashboard({ result, onReset }) {
                 {iconMap[risk_level]}
                 <span className="font-semibold tracking-wide" style={{ color }}>{risk_level} Risk Level</span>
               </div>
-              <p className="text-slate-400 max-w-sm mt-4">
-                AI Summary: You have a {risk_level.toLowerCase()} probability indication based on your metrics. {risk_level === 'High' ? 'Immediate consultation recommended.' : 'Keep monitoring.'}
+              <p className="text-slate-400 max-w-sm mt-4 text-sm leading-relaxed">
+                {care_plan?.analysis || "NeuraHealth engine complete. Analysis computed securely against population baselines."}
               </p>
             </div>
             
@@ -122,7 +145,7 @@ export default function ResultDashboard({ result, onReset }) {
         <div className="col-span-1 glass-panel rounded-2xl p-6 flex flex-col">
           <div className="flex items-center space-x-2 mb-4">
             <TrendingUp className="w-5 h-5 text-purple-400" />
-            <h3 className="font-semibold">6-Month Trend</h3>
+            <h3 className="font-semibold">6-Month Trajectory</h3>
           </div>
           <div className="flex-1 min-h-[150px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -141,51 +164,44 @@ export default function ResultDashboard({ result, onReset }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Reasons */}
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 neon-glow-blue"></div>
-          <h3 className="text-xl font-bold mb-4 flex items-center space-x-2">
-            <Info className="w-5 h-5 text-blue-400" />
-            <span>Key Factors</span>
+      {/* AI Personalized Care Plan (Categorized) */}
+      <div className="glass-panel rounded-2xl p-8 relative overflow-hidden">
+        {/* Animated scanning bar feeling */}
+        <motion.div 
+          animate={{ y: ["0%", "100%", "0%"] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+          className="absolute top-0 left-0 w-1 h-32 bg-gradient-to-b from-transparent via-cyan-400 to-transparent neon-glow-cyan opacity-50"
+        />
+
+        <div className="flex items-center space-x-3 mb-8 border-b border-slate-700/50 pb-4">
+          <div className="p-2 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 rounded-lg shadow-[0_0_10px_rgba(6,182,212,0.3)]">
+            <BrainCircuit className="w-6 h-6 text-cyan-400" />
+          </div>
+          <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400">
+            AI Synchronized Care Plan
           </h3>
-          <ul className="space-y-3">
-            {reasons?.map((reason, idx) => (
-              <motion.li 
-                key={idx}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 * idx }}
-                className="flex items-start space-x-3 text-slate-300"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0 neon-glow-blue"></div>
-                <span>{reason}</span>
-              </motion.li>
-            ))}
-          </ul>
         </div>
 
-        {/* Recommendations */}
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-purple-500 neon-glow-purple"></div>
-          <h3 className="text-xl font-bold mb-4 flex items-center space-x-2">
-            <CheckCircle className="w-5 h-5 text-purple-400" />
-            <span>AI Recommendations</span>
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            {recommendations?.map((rec, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 * idx }}
-                className="px-4 py-2 rounded-full glass-panel border border-slate-700/50 text-sm font-medium text-slate-200 hover:border-purple-500/50 hover:bg-purple-500/10 transition-colors cursor-default"
-              >
-                {rec}
-              </motion.div>
-            ))}
-          </div>
-        </div>
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        >
+          {guidanceCards.map((card, idx) => (
+            <motion.div 
+              key={idx}
+              variants={itemVariants}
+              className={`flex flex-col space-y-3 bg-slate-800/40 p-5 rounded-xl border ${card.border} hover:bg-slate-700/40 transition-colors`}
+            >
+              <div className="flex items-center space-x-3 mb-2">
+                 <card.icon className={`w-5 h-5 ${card.color}`} />
+                 <h4 className="font-semibold text-slate-200 tracking-wide">{card.title}</h4>
+              </div>
+              <p className="text-slate-400 leading-relaxed font-light text-sm pl-8 border-l-2 border-slate-700/50">{card.text}</p>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
 
       <div className="flex justify-center pt-4">
