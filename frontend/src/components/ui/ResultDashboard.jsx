@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle, BrainCircuit, Apple, HeartPulse, Moon, Stethoscope } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle, BrainCircuit, Apple, HeartPulse, Moon, Stethoscope, Hexagon, FileText, Download } from 'lucide-react';
+import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
+import { getHistory } from '../../services/api';
+import { generateDoctorReport } from '../../utils/pdfGenerator';
 
 const generateTrendData = (currentRisk) => {
   return Array.from({ length: 6 }).map((_, i) => ({
@@ -10,7 +12,7 @@ const generateTrendData = (currentRisk) => {
   }));
 };
 
-const CircularProgress = ({ percentage, color }) => {
+const CircularProgress = ({ percentage, color, label = "Risk" }) => {
   const [val, setVal] = useState(0);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ const CircularProgress = ({ percentage, color }) => {
           stroke="currentColor"
           strokeWidth="12"
           fill="transparent"
-          className="text-slate-700"
+          className="text-slate-700/50"
         />
         <motion.circle
           cx="96"
@@ -62,14 +64,15 @@ const CircularProgress = ({ percentage, color }) => {
         <span className="text-4xl font-bold tracking-tight glow-text" style={{ color }}>
           {Math.round(val)}%
         </span>
-        <span className="text-xs text-slate-400 uppercase tracking-widest mt-1">Risk</span>
+        <span className="text-xs text-slate-400 uppercase tracking-widest mt-1 font-bold">{label}</span>
       </div>
     </div>
   );
 };
 
-export default function ResultDashboard({ result, onReset }) {
-  const { risk_percentage, risk_level, care_plan } = result;
+export default function ResultDashboard({ result, formData, diseaseType, onReset }) {
+  const { risk_percentage, risk_level, care_plan, stroke_risk } = result;
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const colorMap = {
     Low: '#22c55e',    // Green
@@ -86,15 +89,13 @@ export default function ResultDashboard({ result, onReset }) {
   const color = colorMap[risk_level] || colorMap.Low;
   const trendData = generateTrendData(risk_percentage);
 
-  // Animation variants for the AI text
+  // Stroke color stratifier
+  const strokeColor = stroke_risk > 70 ? '#ef4444' : stroke_risk > 35 ? '#f97316' : '#3b82f6';
+  const strokeLabel = stroke_risk > 70 ? 'CRITICAL' : stroke_risk > 35 ? 'ELEVATED' : 'LOW';
+
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.6 // Sequence paragraphs like AI typing
-      }
-    }
+    visible: { opacity: 1, transition: { staggerChildren: 0.6 } }
   };
 
   const itemVariants = {
@@ -102,13 +103,34 @@ export default function ResultDashboard({ result, onReset }) {
     visible: { opacity: 1, x: 0, transition: { duration: 0.8 } }
   };
 
-  // Structured categories 
   const guidanceCards = care_plan ? [
     { title: "Dietary Adjustments", text: care_plan.diet, icon: Apple, color: "text-green-400", border: "border-green-500/30" },
     { title: "Exercise Protocol", text: care_plan.exercise, icon: HeartPulse, color: "text-rose-400", border: "border-rose-500/30" },
     { title: "Lifestyle Habit Changes", text: care_plan.lifestyle, icon: Moon, color: "text-indigo-400", border: "border-indigo-500/30" },
     { title: "Medical Consultation", text: care_plan.medical, icon: Stethoscope, color: "text-blue-400", border: "border-blue-500/30" }
   ] : [];
+
+  const handleDownloadPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      const userId = localStorage.getItem('user_id');
+      let historyData = [];
+      let username = "Anonymous";
+      
+      if (userId) {
+          const apiRes = await getHistory(userId);
+          historyData = apiRes.history || [];
+          username = apiRes.username || "Anonymous";
+      }
+
+      generateDoctorReport(username, diseaseType || "Health", formData || {}, result, historyData);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PDF. Check console for details.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   return (
     <motion.div
@@ -120,34 +142,66 @@ export default function ResultDashboard({ result, onReset }) {
     >
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Main Score Card */}
-        <div className="col-span-1 xl:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group">
+        <div className="col-span-1 xl:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group border border-slate-700/50">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          
           <div className="flex flex-col md:flex-row items-center justify-between z-10 relative">
-            <div className="space-y-4 mb-6 md:mb-0">
+            <div className="space-y-4 mb-6 md:mb-0 max-w-sm">
               <div className="flex items-center space-x-3">
                 <Activity className="w-8 h-8 text-blue-400" />
                 <h2 className="text-2xl font-bold">Health Assessment</h2>
               </div>
+              
               <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full glass-panel border border-slate-700/50 shadow-lg">
                 {iconMap[risk_level]}
-                <span className="font-semibold tracking-wide" style={{ color }}>{risk_level} Risk Level</span>
+                <span className="font-semibold tracking-wide" style={{ color }}>{risk_level} Risk Stage</span>
               </div>
-              <p className="text-slate-400 max-w-sm mt-4 text-sm leading-relaxed">
+              
+              <p className="text-slate-300 mt-4 text-sm leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
                 {care_plan?.analysis || "NeuraHealth engine complete. Analysis computed securely against population baselines."}
               </p>
             </div>
             
-            <CircularProgress percentage={risk_percentage} color={color} />
+            <div className="flex space-x-6 items-center">
+              <CircularProgress percentage={risk_percentage} color={color} label="Base Risk" />
+              
+              {/* Optional Stroke Risk */}
+              {stroke_risk !== undefined && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5, duration: 0.8 }}
+                  className="hidden md:flex flex-col items-center bg-slate-800/40 p-4 border border-slate-700/50 rounded-2xl relative"
+                >
+                  <Hexagon className="absolute text-slate-700 w-full h-full opacity-20" />
+                  <span className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Stroke Propensity</span>
+                  <span className="text-3xl font-extrabold tracking-tighter" style={{ color: strokeColor }}>
+                    {stroke_risk}%
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-1 bg-black/30 rounded mt-2 border" style={{ borderColor: strokeColor, color: strokeColor }}>
+                    {strokeLabel}
+                  </span>
+                </motion.div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Trend Graph */}
-        <div className="col-span-1 glass-panel rounded-2xl p-6 flex flex-col">
-          <div className="flex items-center space-x-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-purple-400" />
-            <h3 className="font-semibold">6-Month Trajectory</h3>
+        <div className="col-span-1 glass-panel rounded-2xl p-6 flex flex-col relative overflow-hidden border border-slate-700/50">
+          {stroke_risk > 70 && (
+             <div className="absolute inset-0 bg-red-500/10 animate-pulse pointer-events-none"></div>
+          )}
+          <div className="flex items-center justify-between mb-4 z-10">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-5 h-5 text-purple-400" />
+              <h3 className="font-semibold">6-Month Trajectory</h3>
+            </div>
+            {stroke_risk !== undefined && (
+              <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700">Dual Model</span>
+            )}
           </div>
-          <div className="flex-1 min-h-[150px] w-full">
+          <div className="flex-1 min-h-[150px] w-full z-10">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trendData}>
                 <defs>
@@ -164,9 +218,25 @@ export default function ResultDashboard({ result, onReset }) {
         </div>
       </div>
 
-      {/* AI Personalized Care Plan (Categorized) */}
-      <div className="glass-panel rounded-2xl p-8 relative overflow-hidden">
-        {/* Animated scanning bar feeling */}
+      {stroke_risk !== undefined && stroke_risk > 35 && (
+        <motion.div 
+           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
+           className="glass-panel p-6 border-red-500/40 bg-red-900/10 rounded-2xl flex flex-col sm:flex-row items-center sm:space-x-6 space-y-4 sm:space-y-0"
+        >
+           <div className="flex-shrink-0 w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30 neon-glow-red">
+             <AlertTriangle className="w-8 h-8 text-red-500" />
+           </div>
+           <div>
+             <h3 className="text-lg font-bold text-red-400 mb-1">Near-Future Stroke Warning Triggered</h3>
+             <p className="text-slate-300 text-sm leading-relaxed">
+               The advanced cerebrovascular mapping model has detected an elevated stroke vulnerability pattern explicitly linked to your profile parameters. Immediate review of the actionable items below is strongly advised.
+             </p>
+           </div>
+        </motion.div>
+      )}
+
+      {/* AI Personalized Care Plan */}
+      <div className="glass-panel rounded-2xl p-8 relative overflow-hidden border border-slate-700/50">
         <motion.div 
           animate={{ y: ["0%", "100%", "0%"] }}
           transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
@@ -204,12 +274,30 @@ export default function ResultDashboard({ result, onReset }) {
         </motion.div>
       </div>
 
-      <div className="flex justify-center pt-4">
+      <div className="flex flex-col sm:flex-row items-center justify-center pt-4 space-y-4 sm:space-y-0 sm:space-x-6 border-t border-slate-700/50 mt-8">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleDownloadPdf}
+          disabled={isGeneratingPdf}
+          className="flex items-center space-x-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 border border-purple-500/50 text-white font-bold transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] disabled:opacity-50"
+        >
+          {isGeneratingPdf ? (
+             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+             <>
+               <FileText className="w-5 h-5" />
+               <span>Download Doctor-Ready PDF</span>
+               <Download className="w-4 h-4 ml-1 opacity-70" />
+             </>
+          )}
+        </motion.button>
+
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onReset}
-          className="px-8 py-3 rounded-full bg-slate-800 border border-slate-700 text-white font-medium hover:bg-slate-700 transition-colors shadow-lg"
+          className="px-8 py-3.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-medium hover:bg-slate-700 hover:text-white transition-colors"
         >
           Run Another Analysis
         </motion.button>

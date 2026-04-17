@@ -3,16 +3,41 @@ from flask_cors import CORS
 import joblib
 import numpy as np
 import warnings
+import os
+import uuid
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+from pymongo import MongoClient
+from werkzeug.security import generate_password_hash, check_password_hash
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
+load_dotenv()
+
 app = Flask(__name__)
 CORS(app)
+
+# 🔹 MongoDB Setup
+MONGO_URI = os.getenv("MONGO_URI")
+users_col = None
+preds_col = None
+if MONGO_URI:
+    try:
+        client = MongoClient(MONGO_URI)
+        db = client['neurahealth']
+        users_col = db['users']
+        preds_col = db['predictions']
+        print("Connected to MongoDB Atlas securely!")
+    except Exception as e:
+        print(f"MongoDB Connection Failure: {e}")
+else:
+    print("WARNING: MONGO_URI not found in .env")
 
 # 🔹 Load models
 diabetes_model = joblib.load("models/diabetes_model.pkl")
 heart_model = joblib.load("models/model.pkl") 
 cancer_model = joblib.load("models/cancer.pkl")
+stroke_model = joblib.load("models/heart_disease_model.pkl")
 
 try:
     heart_scaler = joblib.load("models/scaler.pkl")
@@ -41,10 +66,8 @@ def safe_int(val):
     except ValueError:
         return 0
 
-def generate_care_plan(disease, data, risk_percentage):
-    """Smart Heuristics Engine: Generates personalized categorized medical summaries."""
-    level = "High" if risk_percentage > 70 else "Moderate" if risk_percentage > 30 else "Low"
-    
+def generate_care_plan(disease, data, risk_percentage, stroke_risk=None):
+    """Smart Heuristics Engine: Generates highly specialized, staged medical summaries."""
     plan = {
         "analysis": "",
         "diet": "",
@@ -54,83 +77,107 @@ def generate_care_plan(disease, data, risk_percentage):
     }
     
     if disease == "diabetes":
+        prob = risk_percentage / 100.0
+        if prob <= 0.3:
+            level = "Low Risk"
+        elif prob <= 0.6:
+            level = "Pre-diabetes risk"
+        elif prob <= 0.8:
+            level = "Type 2 Diabetes likely"
+        else:
+            level = "High/Severe diabetes risk"
+            
         glucose = safe_float(data.get('glucose'))
         bmi = safe_float(data.get('bmi'))
         
-        plan["analysis"] = f"My analysis calculates a {risk_percentage}% ({level}) probability for diabetes."
-        if glucose > 125: plan["analysis"] += f" Your fasting glucose of {glucose} mg/dL is a primary driver."
+        plan["analysis"] = f"My analysis calculates a {risk_percentage}% probability, stratifying you into the '{level}' stage."
+        if glucose > 125: plan["analysis"] += f" Your elevated fasting glucose of {glucose} mg/dL highly correlates to pancreatic stress."
         
         # Diet
-        if bmi >= 30:
-            plan["diet"] = "Focus on a caloric deficit. Emphasize low-glycemic foods, lean proteins, and fiber to stabilize insulin spikes while gradually reducing weight."
+        if "Pre-diabetes" in level or "High" in level or "Type 2" in level:
+             plan["diet"] = "Adopt a strict low-glycemic index protocol. Eliminate refined sugars, substitute heavily with cruciferous vegetables, and limit carbohydrate intake to slow-digesting complex grains to minimize heavy insulin spikes."
         else:
-            plan["diet"] = "Maintain a balanced diet with complex carbohydrates. Avoid refined sugars and processed foods to keep your glucose levels steady."
+             plan["diet"] = "Maintain a metabolic-friendly balanced diet. Ensure you do not over-consume simple sugars to prevent future insulin resistance."
             
         # Exercise
-        if level == "High":
-            plan["exercise"] = "Incorporate low-impact cardio, such as swimming or brisk walking for 30 minutes daily. A 15-minute walk immediately following meals is highly recommended to suppress glycemic spikes."
+        if "High" in level or "Type 2" in level:
+             plan["exercise"] = "Immediate action: A critical 15-20 minute brisk walk immediately following every major meal is strongly indicated. It forces your muscles to absorb glucose safely, bypassing insulin reliance."
         else:
-            plan["exercise"] = "Aim for at least 150 minutes of moderate aerobic activity weekly combined with resistance training to improve muscle insulin sensitivity."
+             plan["exercise"] = "Aim for 150 minutes of moderate aerobic cardiovascular routines combined strongly with resistance/hypertrophy training. Increased muscle mass drastically boosts natural insulin sensitivity."
             
         # Lifestyle
-        plan["lifestyle"] = "Monitor your fasting blood sugar weekly. Ensure you get 7-8 hours of sleep, as sleep deprivation worsens insulin resistance."
+        plan["lifestyle"] = "Achieve 7.5 to 8 solid hours of sleep per night; sleep derivation causes massive spikes in cortisol and drastically worsens insulin resistance within days."
         
         # Medical
-        if level == "High":
-            plan["medical"] = "Immediate priority: Schedule an HbA1c test with your endocrinologist or primary care physician this week for clinical confirmation."
+        if "High" in level or "Type 2" in level:
+             plan["medical"] = "Critical priority: Schedule an HbA1c and comprehensive metabolic panel with your primary care provider this week to discuss medical intervention algorithms (e.g., Metformin)."
         else:
-            plan["medical"] = "Routine priority: Discuss metabolic panels during your next annual physical to ensure markers aren't trending upward."
+             plan["medical"] = "Preventative priority: Monitor fasting glucose annually and track standard metabolic lipids during standard checkups."
 
     elif disease == "heart":
+        level = "High" if risk_percentage > 70 else "Moderate" if risk_percentage > 30 else "Low"
+        
         bp = safe_float(data.get('resting_blood_pressure'))
         chol = safe_float(data.get('cholestoral'))
         
-        plan["analysis"] = f"My cardiovascular analysis indicates a {risk_percentage}% ({level}) probability of symptomatic heart disease."
-        if bp > 130: plan["analysis"] += f" Hypertensive blood pressure ({bp} mmHg) is heavily weighing on this score."
+        plan["analysis"] = f"My general cardiovascular topology indicates a {risk_percentage}% ({level}) probability of symptomatic heart disease."
+        if stroke_risk is not None:
+             stroke_lvl = "Critical" if stroke_risk > 70 else "Elevated" if stroke_risk > 35 else "Low"
+             plan["analysis"] += f" Furthermore, specifically analyzing near-future cerebral vascular parameters, I detect a {stroke_risk}% ({stroke_lvl}) trajectory for Stroke."
+        
+        if bp > 130: plan["analysis"] += f" Hypertensive blood pressure ({bp} mmHg) is mechanically tearing vascular walls."
         
         # Diet
-        if chol > 200:
-            plan["diet"] = "Adopt a strict Mediterranean-style diet. Eliminate trans fats, reduce saturated fats, and introduce high-soluble fiber foods (like oats and beans) to actively pull cholesterol from your bloodstream."
+        if stroke_risk is not None and stroke_risk > 35:
+             plan["diet"] = "Immediate sodium elimination. Follow a heavily restricted DASH diet explicitly engineered to reduce blood pressure. Excessive sodium forces lethal arterial stiffness escalating stroke risks."
         else:
-            plan["diet"] = "Follow a heart-healthy DASH diet rich in vegetables, fruits, and whole grains. Keep sodium intake under 2,300mg a day."
+             plan["diet"] = "Adopt a strict Mediterranean-style protocol. Concentrate on Omega-3 fatty acids, olive oil, and high-soluble fiber foods (like oats) to actively pull LDL cholesterol out of the bloodstream."
             
         # Exercise
-        if level == "High":
-            plan["exercise"] = "Avoid high-intensity sudden exertion. Stick to gentle, steady-state Zone 1 or Zone 2 cardiovascular exercises (like casual cycling) until cleared by a professional."
+        if level == "High" or (stroke_risk is not None and stroke_risk > 50):
+             plan["exercise"] = "Avoid high-intensity sudden exertion! Do NOT stress the cardiac engine. Stick natively to gentle, steady-state Zone 1 cardiovascular walks until medically cleared."
         else:
-            plan["exercise"] = "Engage in moderate-to-vigorous aerobic exercise 3-4 times a week to strengthen your cardiac muscle and improve vascular endothelium health."
+             plan["exercise"] = "Perform moderate-to-vigorous aerobic Zone 2/3 exercises 4 times weekly. Endothelial shear stress mechanically improves blood vessel elasticity over time."
             
         # Lifestyle
-        plan["lifestyle"] = "Practice stress management through deep breathing or meditation to mitigate blood pressure spikes. Avoid smoking entirely."
+        if stroke_risk is not None and stroke_risk > 35:
+             plan["lifestyle"] = "Blood pressure volatility is the #1 initiator of strokes. Implement heavy stress reduction techniques strictly. If you smoke, complete smoking cessation is physically vital immediately."
+        else:
+             plan["lifestyle"] = "Practice psychological stress management. Persistent cortisol narrows arteries sequentially over time."
         
         # Medical
-        if level == "High":
-            plan["medical"] = "Critical priority: Contact a cardiologist immediately for a comprehensive lipid panel, stress test, and clinical ECG interpretation."
+        if level == "High" or (stroke_risk is not None and stroke_risk > 50):
+             plan["medical"] = "CRITICAL: Contact a cardiologist immediately. You require a clinical ECG interpretation, localized lipid panel, and potentially an ultrasound of your carotid arteries to assess cerebrovascular plaque explicitly."
         else:
-            plan["medical"] = "Preventative priority: Bring this cardiovascular assessment to your next doctor's visit to discuss long-term heart-health maintenance."
+             plan["medical"] = "Bring this AI cardiovascular risk profiling to your primary physician to explicitly establish a long-term heart-health timeline."
 
     elif disease == "cancer":
+        level = "High" if risk_percentage > 70 else "Moderate" if risk_percentage > 30 else "Low"
         smoking = safe_int(data.get('SMOKING'))
+        yellow = safe_int(data.get('YELLOW_FINGERS'))
+        cough = safe_int(data.get('COUGHING'))
         
-        plan["analysis"] = f"The oncology screening model calculated a {risk_percentage}% ({level}) correlation with early asymptomatic markers."
+        plan["analysis"] = f"My pulmonary oncology deep-scan computed a {risk_percentage}% ({level}) correlation specifically mirroring Lung Cancer manifestations."
+        if smoking == 1:
+             plan["analysis"] += " The ongoing pulmonary particulate exposure from smoking is the apex statistical multiplier in this result."
         
         # Diet
-        plan["diet"] = "Focus heavily on an anti-inflammatory, antioxidant-rich diet. Consume dark leafy greens, berries, and cruciferous vegetables like broccoli and Brussels sprouts."
+        plan["diet"] = "Focus intensely on an anti-inflammatory, antioxidant-dense diet. Cruciferous vegetables (broccoli, cabbage) contain sulforaphane which explicitly aids the liver and lungs in environmental toxin clearance frameworks."
         
         # Exercise
-        plan["exercise"] = "Maintain regular daily movement to keep your immune system highly functional and assist in natural cellular regulation."
+        plan["exercise"] = "Incorporate controlled diaphragmatic deep-breathing exercises daily. Sustaining maximal lung volume efficiency ensures deep alveolar capillary networks remain highly functional and well-oxygenated."
         
         # Lifestyle
-        if smoking == 1:
-            plan["lifestyle"] = "Immediate smoking cessation is the most critical lifestyle change you can make. The intersection of prolonged pulmonary exposure is the highest statistical coefficient for lung vulnerability."
+        if smoking == 1 or yellow == 1:
+             plan["lifestyle"] = "Immediate and total tobacco/vaping cessation is fundamentally the most critical adjustment for survival. Pulmonary carcinogen bombardment overrides any positive lifestyle adjustments."
         else:
-            plan["lifestyle"] = "Minimize exposure to environmental toxins and limit alcohol consumption, as these generate prolonged inflammatory responses."
+             plan["lifestyle"] = "Minimize all second-hand smoke exposure, rigorously avoid severe environmental/industrial toxins, and monitor home environments for radon gas leakage."
             
         # Medical
-        if level == "High":
-            plan["medical"] = "High priority: Request a proactive, specialized preventative oncology screening panel from your physician instead of waiting for symptomatic progression."
+        if level == "High" or cough == 1:
+             plan["medical"] = "HIGH PRIORITY: Request an explicit Low-Dose CT (LDCT) scan of your lungs from a pulmonologist or oncologist immediately. Do not wait for symptomatic deterioration. Rule out COPD or neoplastic nodules immediately."
         else:
-            plan["medical"] = "Maintain standard age-appropriate cancer screenings (such as mammograms, colonoscopies, or dermatology sweeps) annually."
+             plan["medical"] = "Routine priority: Ensure continuous age-appropriate lung surveillance and standard general preventative oncology scans."
 
     return plan
 
@@ -139,12 +186,83 @@ def generate_care_plan(disease, data, risk_percentage):
 def home():
     return "Backend Running"
 
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+    if users_col is None:
+        return jsonify({"error": "Database not configured"}), 500
+    
+    existing = users_col.find_one({"username": username})
+    if existing:
+        return jsonify({"error": "Username already exists"}), 400
+    
+    user_id = str(uuid.uuid4())
+    hashed = generate_password_hash(password)
+    users_col.insert_one({
+        "user_id": user_id,
+        "username": username,
+        "password": hashed,
+        "created_at": datetime.now(timezone.utc)
+    })
+    return jsonify({"message": "Registration successful", "user_id": user_id})
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if users_col is None:
+        return jsonify({"error": "Database not configured"}), 500
+        
+    user = users_col.find_one({"username": username})
+    if user and check_password_hash(user['password'], password):
+        return jsonify({"message": "Login successful", "user_id": user['user_id']})
+    return jsonify({"error": "Invalid credentials"}), 401
+
+@app.route('/api/onboarding', methods=['POST'])
+def save_onboarding():
+    data = request.json
+    user_id = data.get('user_id')
+    if not user_id or users_col is None:
+        return jsonify({"error": "Invalid request"}), 400
+        
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$set": {"onboarding_data": data.get('onboarding', {})}}
+    )
+    return jsonify({"message": "Onboarding saved successfully!"})
+
+@app.route('/api/history/<user_id>', methods=['GET'])
+def get_history(user_id):
+    if users_col is None or preds_col is None:
+        return jsonify({"error": "Database not configured"}), 500
+        
+    user = users_col.find_one({"user_id": user_id})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    predictions = list(preds_col.find({"user_id": user_id}).sort("timestamp", -1))
+    for p in predictions:
+        p['_id'] = str(p['_id'])  # Convert ObjectId to string for JSON serialization
+        
+    return jsonify({
+        "username": user.get("username"),
+        "onboarding_data": user.get("onboarding_data", {}),
+        "history": predictions
+    })
+
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.json
     disease = data.get("type", data.get("disease"))
 
     try:
+        stroke_risk_percentage = None
+
         if disease == "diabetes":
             input_data = [
                 safe_float(data.get('pregnancies')),
@@ -163,6 +281,7 @@ def predict():
             model = diabetes_model
 
         elif disease == "heart":
+            # 1. First Model (General Heart Disease - 23 Features)
             features_23 = np.zeros(23)
             features_23[0] = safe_float(data.get('age'))
             features_23[1] = safe_float(data.get('resting_blood_pressure'))
@@ -211,6 +330,36 @@ def predict():
                 
             model = heart_model
 
+            # 2. Second Model (Stroke Risk - 15 Features)
+            stroke_features = [
+                1.0 if sex == 'Male' else 0.0,                   # male
+                safe_float(data.get('age')),                     # age
+                safe_float(data.get('education', 1.0)),          # education
+                safe_float(data.get('currentSmoker', 0.0)),      # currentSmoker
+                safe_float(data.get('cigsPerDay', 0.0)),         # cigsPerDay
+                safe_float(data.get('BPMeds', 0.0)),             # BPMeds
+                safe_float(data.get('prevalentStroke', 0.0)),    # prevalentStroke
+                safe_float(data.get('prevalentHyp', 0.0)),       # prevalentHyp
+                safe_float(data.get('diabetes', 0.0)),           # diabetes
+                safe_float(data.get('cholestoral')),             # totChol
+                safe_float(data.get('sysBP', data.get('resting_blood_pressure'))), # sysBP
+                safe_float(data.get('diaBP', 80.0)),             # diaBP
+                safe_float(data.get('BMI', 25.0)),               # BMI
+                safe_float(data.get('heartRate', data.get('Max_heart_rate'))),     # heartRate
+                safe_float(data.get('glucose', 100.0)),          # glucose
+            ]
+            stroke_array = np.array(stroke_features).reshape(1, -1)
+            try:
+                s_prob_arr = stroke_model.predict_proba(stroke_array)
+                if s_prob_arr.shape[1] > 1:
+                    s_prob = s_prob_arr[0][1]
+                else:
+                    s_prob = s_prob_arr[0][0]
+                stroke_risk_percentage = round(s_prob * 100, 2)
+            except Exception as e:
+                # If the secondary model fails, just safely ignore it
+                stroke_risk_percentage = None
+
         elif disease == "cancer":
             c_data = [
                 int(data.get('YELLOW_FINGERS', 0)),
@@ -235,7 +384,7 @@ def predict():
         else:
             return jsonify({"error": "Invalid disease type"}), 400
 
-        # Prediction
+        # Primary Prediction
         try:
             prob_arr = model.predict_proba(input_array)
             if prob_arr.shape[1] > 1:
@@ -254,13 +403,31 @@ def predict():
         risk = round(prob * 100, 2)
         
         # Fire our AI reasoning engine
-        personalized_care_plan = generate_care_plan(disease, data, risk)
+        personalized_care_plan = generate_care_plan(disease, data, risk, stroke_risk_percentage)
 
-        return jsonify({
+        out_json = {
             "risk_percentage": risk,
             "risk_level": "High" if risk > 70 else "Medium" if risk > 30 else "Low",
             "care_plan": personalized_care_plan
-        })
+        }
+        
+        if stroke_risk_percentage is not None:
+             out_json["stroke_risk"] = stroke_risk_percentage
+             
+        # Save to MongoDB explicitly
+        user_id = data.get("user_id")
+        if user_id and preds_col is not None:
+             preds_col.insert_one({
+                 "user_id": user_id,
+                 "disease": disease,
+                 "inputs": data,
+                 "risk_percentage": risk,
+                 "stroke_risk": stroke_risk_percentage,
+                 "care_plan": personalized_care_plan,
+                 "timestamp": datetime.now(timezone.utc).isoformat()
+             })
+
+        return jsonify(out_json)
 
     except Exception as e:
         import traceback
