@@ -58,7 +58,7 @@ const InputField = ({ label, name, type = "number", icon: Icon, placeholder, ste
         className="block w-full pl-12 pr-4 py-4 rounded-2xl font-medium outline-none transition-all"
         style={{
           backgroundColor: '#FFFFFF',
-          border: '2px solid transparent',
+          border: '2px solid #EDE9E6',           // Always visible subtle border
           color: '#5C4F4A',
         }}
         placeholder={placeholder}
@@ -94,7 +94,7 @@ export default function CancerForm({ formData, setFormData }) {
             className="block w-full px-5 py-4 rounded-2xl font-medium outline-none transition-all appearance-none"
             style={{
               backgroundColor: '#FFFFFF',
-              border: '2px solid transparent',
+              border: '2px solid #EDE9E6',        // Always visible subtle border
               color: '#5C4F4A',
             }}
           >

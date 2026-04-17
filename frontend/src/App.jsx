@@ -504,12 +504,14 @@ const MainPredictor = () => {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12 relative">
+      <main className="flex-1 w-full px-6 py-12 relative">
         <AnimatePresence mode="wait">
           {loading ? (
             <Loader key="loader" />
           ) : result ? (
-            <ResultDashboard key="result" result={result} formData={formData} diseaseType={activeTab} onReset={() => setResult(null)} />
+            <div className="max-w-7xl mx-auto">
+              <ResultDashboard key="result" result={result} formData={formData} diseaseType={activeTab} onReset={() => setResult(null)} />
+            </div>
           ) : (
             <motion.div
               key="forms"
@@ -517,8 +519,9 @@ const MainPredictor = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.4 }}
-              className="max-w-4xl mx-auto"
+              className={view === 'symptom' ? 'max-w-6xl mx-auto' : 'max-w-4xl mx-auto'}
             >
+              {/* Page title + Clinical/Symptom switcher */}
               <div className="text-center mb-12 space-y-4">
                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight" style={{ color: '#5C4F4A' }}>
                   {view === 'clinical' ? 'Clinical Analysis' : 'Symptom Analysis'}
@@ -527,19 +530,17 @@ const MainPredictor = () => {
                   <div className="inline-flex p-1 bg-white rounded-2xl border shadow-sm" style={{ borderColor: '#EDE9E6' }}>
                     <button
                       onClick={() => setView('clinical')}
-                      className={`px-8 py-3 rounded-xl text-sm font-semibold transition-all ${view === 'clinical'
-                        ? 'bg-[#5C766D] text-white shadow-sm'
-                        : 'text-[#5C4F4A] hover:bg-[#EDE9E6]'
-                        }`}
+                      className={`px-8 py-3 rounded-xl text-sm font-semibold transition-all ${
+                        view === 'clinical' ? 'bg-[#5C766D] text-white shadow-sm' : 'text-[#5C4F4A] hover:bg-[#EDE9E6]'
+                      }`}
                     >
                       Clinical Inputs
                     </button>
                     <button
                       onClick={() => setView('symptom')}
-                      className={`px-8 py-3 rounded-xl text-sm font-semibold transition-all ${view === 'symptom'
-                        ? 'bg-[#5C766D] text-white shadow-sm'
-                        : 'text-[#5C4F4A] hover:bg-[#EDE9E6]'
-                        }`}
+                      className={`px-8 py-3 rounded-xl text-sm font-semibold transition-all ${
+                        view === 'symptom' ? 'bg-[#5C766D] text-white shadow-sm' : 'text-[#5C4F4A] hover:bg-[#EDE9E6]'
+                      }`}
                     >
                       Symptom Checker
                     </button>
@@ -547,74 +548,66 @@ const MainPredictor = () => {
                 </div>
               </div>
 
+              {/* ── Symptom Checker ── */}
               {view === 'symptom' ? (
                 <SymptomChecker userId={userId} onComplete={handleSymptomComplete} />
               ) : (
                 <>
-                  {/* Tab Navigation */}
-                  <div className="flex gap-3 mb-10 overflow-x-auto pb-4 hide-scrollbar">
+                  {/* Disease tabs */}
+                  <div className="flex gap-4 mb-10 overflow-x-auto pb-2 hide-scrollbar">
                     {tabs.map((tab) => (
                       <button
                         key={tab.id}
-                        onClick={() => {
-                          setActiveTab(tab.id);
-                          setFormData({});
-                        }}
-                        className={`flex-1 min-w-[160px] flex items-center justify-center gap-3 py-5 px-6 rounded-3xl border transition-all font-medium text-base
-                          ${activeTab === tab.id
-                            ? 'bg-white shadow-xl border-[#C9996B]'
-                            : 'bg-white border-transparent hover:border-[#EDE9E6]'
-                          }`}
+                        onClick={() => { setActiveTab(tab.id); setFormData({}); }}
+                        className="flex-1 min-w-[160px] flex items-center justify-center gap-3 py-5 px-6 rounded-3xl border-2 transition-all font-semibold text-base"
                         style={{
-                          color: activeTab === tab.id ? '#5C4F4A' : '#5C4F4A80'
+                          backgroundColor: '#FFFFFF',
+                          borderColor: activeTab === tab.id ? tab.color : 'rgba(92,79,74,0.10)',
+                          color: activeTab === tab.id ? '#5C4F4A' : 'rgba(92,79,74,0.50)',
+                          boxShadow: activeTab === tab.id ? '0 8px 30px rgba(92,79,74,0.12)' : 'none',
                         }}
                       >
-                        <tab.icon className="w-6 h-6" style={{ color: tab.color }} />
+                        <tab.icon className="w-5 h-5" style={{ color: tab.color }} />
                         <span>{tab.label}</span>
                       </button>
                     ))}
                   </div>
 
-                  {/* Form Container */}
+                  {/* Form container */}
                   <div
-                    className="rounded-3xl p-10 shadow-xl border"
-                    style={{
-                      backgroundColor: '#FFFFFF',
-                      borderColor: '#EDE9E6'
-                    }}
+                    className="rounded-3xl p-10 shadow-xl"
+                    style={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(92,79,74,0.08)' }}
                   >
+                    {/* Form header */}
                     <div className="mb-10 flex items-center justify-between">
                       <div>
                         <h3 className="text-3xl font-bold" style={{ color: '#5C4F4A' }}>
                           {tabs.find(t => t.id === activeTab)?.label} Risk Assessment
                         </h3>
-                        <p className="text-sm mt-2" style={{ color: '#5C4F4A80' }}>
+                        <p className="text-sm mt-2" style={{ color: 'rgba(92,79,74,0.55)' }}>
                           Enter your clinical parameters for accurate AI analysis
                         </p>
                       </div>
-                      <div
-                        className="p-4 rounded-2xl"
-                        style={{ background: 'linear-gradient(135deg, #5C766D, #5C4F4A)' }}
-                      >
+                      <div className="p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg, #5C766D, #5C4F4A)' }}>
                         {React.createElement(tabs.find(t => t.id === activeTab)?.icon, {
-                          className: "w-9 h-9 text-white"
+                          className: 'w-9 h-9 text-white'
                         })}
                       </div>
                     </div>
 
+                    {/* Form fields */}
                     <div className="pb-10">
                       {activeTab === DIABETES && <DiabetesForm formData={formData} setFormData={setFormData} />}
                       {activeTab === HEART && <HeartForm formData={formData} setFormData={setFormData} />}
                       {activeTab === CANCER && <CancerForm formData={formData} setFormData={setFormData} />}
                     </div>
 
+                    {/* Submit */}
                     <div className="flex justify-end">
                       <button
                         onClick={handlePredict}
-                        className="flex items-center gap-3 px-12 py-5 rounded-2xl font-semibold text-white text-lg shadow-xl transition-all hover:scale-[1.02]"
-                        style={{
-                          background: 'linear-gradient(135deg, #C9996B 0%, #5C4F4A 100%)'
-                        }}
+                        className="flex items-center gap-3 px-12 py-5 rounded-2xl font-semibold text-white text-lg shadow-xl transition-all hover:scale-[1.02] active:scale-[0.99]"
+                        style={{ background: 'linear-gradient(135deg, #C9996B 0%, #5C4F4A 100%)' }}
                       >
                         Run AI Analysis
                         <ChevronRight className="w-6 h-6" />
