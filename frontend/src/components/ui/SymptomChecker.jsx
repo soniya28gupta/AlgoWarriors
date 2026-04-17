@@ -578,14 +578,277 @@
 
 
 
+// import React, { useState, useEffect, useMemo } from 'react';
+// import { analyzeSymptoms } from '../../services/api';
+// import { motion, AnimatePresence } from 'framer-motion';
+// import {
+//     Stethoscope, Activity, CheckCircle2,
+//     ChevronRight, BrainCircuit,
+//     Search, ShieldAlert,
+//     Wind, Droplets, Eye, ZapOff, Heart
+// } from 'lucide-react';
+
+// export default function SymptomChecker({ userId, onComplete }) {
+//     const [library, setLibrary] = useState([]);
+//     const [selections, setSelections] = useState([]);
+//     const [results, setResults] = useState([]);
+//     const [loading, setLoading] = useState(true);
+//     const [evaluating, setEvaluating] = useState(false);
+//     const [searchQuery, setSearchQuery] = useState("");
+//     const [activeCategory, setActiveCategory] = useState("all");
+
+//     useEffect(() => {
+//         const fetchLibrary = async () => {
+//             try {
+//                 const response = await analyzeSymptoms([]);
+//                 setLibrary(response.symptom_library || []);
+//             } finally {
+//                 setLoading(false);
+//             }
+//         };
+//         fetchLibrary();
+//     }, []);
+
+//     const allSymptoms = useMemo(() => {
+//         const list = (library || []).flatMap(d =>
+//             d.symptoms.map(s => ({ ...s, categoryId: d.id }))
+//         );
+//         return Array.from(new Map(list.map(s => [s.id, s])).values());
+//     }, [library]);
+
+//     const filteredSymptoms = useMemo(() => {
+//         return allSymptoms.filter(s =>
+//             (s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+//                 s.desc.toLowerCase().includes(searchQuery.toLowerCase())) &&
+//             (activeCategory === "all" || s.categoryId === activeCategory)
+//         );
+//     }, [allSymptoms, searchQuery, activeCategory]);
+
+//     useEffect(() => {
+//         const t = setTimeout(async () => {
+//             if (!selections.length) return setResults([]);
+//             setEvaluating(true);
+//             try {
+//                 const res = await analyzeSymptoms(selections, userId);
+//                 setResults(res.results || []);
+//             } finally {
+//                 setEvaluating(false);
+//             }
+//         }, 400);
+//         return () => clearTimeout(t);
+//     }, [selections, userId]);
+
+//     const toggleSymptom = (id) => {
+//         setSelections(prev =>
+//             prev.find(s => s.id === id)
+//                 ? prev.filter(s => s.id !== id)
+//                 : [...prev, { id, severity: 'mild' }]
+//         );
+//     };
+
+//     const updateSeverity = (id, severity) => {
+//         setSelections(prev => prev.map(s => s.id === id ? { ...s, severity } : s));
+//     };
+
+//     const getSymptomIcon = (name) => {
+//         const n = name.toLowerCase();
+//         if (n.includes('breath') || n.includes('cough')) return <Wind className="w-5 h-5 text-sky-400" />;
+//         if (n.includes('heart') || n.includes('chest')) return <Heart className="w-5 h-5 text-rose-400" />;
+//         if (n.includes('weight') || n.includes('thirst')) return <Droplets className="w-5 h-5 text-blue-400" />;
+//         if (n.includes('vision') || n.includes('eye')) return <Eye className="w-5 h-5 text-purple-400" />;
+//         if (n.includes('fatigue')) return <ZapOff className="w-5 h-5 text-yellow-400" />;
+//         return <Activity className="w-5 h-5 text-slate-400" />;
+//     };
+
+//     if (loading) {
+//         return (
+//             <div className="flex items-center justify-center h-[60vh] text-slate-400 text-lg">
+//                 Loading symptoms...
+//             </div>
+//         );
+//     }
+
+//     return (
+//         <div className="max-w-6xl mx-auto px-4 py-8">
+
+//             {/* HEADER */}
+//             <div className="mb-8">
+//                 <h1 className="text-2xl font-semibold text-white mb-1">
+//                     Symptom Checker
+//                 </h1>
+//                 <p className="text-slate-400 text-sm">
+//                     Select your symptoms to get instant analysis
+//                 </p>
+//             </div>
+
+//             {/* SEARCH */}
+//             <div className="relative mb-6">
+//                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+//                 <input
+//                     type="text"
+//                     placeholder="Search symptoms..."
+//                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+//                     value={searchQuery}
+//                     onChange={(e) => setSearchQuery(e.target.value)}
+//                 />
+//             </div>
+
+//             <div className="grid lg:grid-cols-3 gap-6">
+
+//                 {/* LEFT */}
+//                 <div className="lg:col-span-2 space-y-5">
+
+//                     {/* CATEGORY */}
+//                     <div className="flex flex-wrap gap-2">
+//                         <button
+//                             onClick={() => setActiveCategory('all')}
+//                             className={`px-3 py-1.5 text-sm rounded-lg ${activeCategory === 'all'
+//                                 ? 'bg-blue-600 text-white'
+//                                 : 'bg-slate-800 text-slate-300'
+//                                 }`}
+//                         >
+//                             All
+//                         </button>
+
+//                         {library.map(cat => (
+//                             <button
+//                                 key={cat.id}
+//                                 onClick={() => setActiveCategory(cat.id)}
+//                                 className={`px-3 py-1.5 text-sm rounded-lg ${activeCategory === cat.id
+//                                     ? 'bg-blue-600 text-white'
+//                                     : 'bg-slate-800 text-slate-300'
+//                                     }`}
+//                             >
+//                                 {cat.name}
+//                             </button>
+//                         ))}
+//                     </div>
+
+//                     {/* SYMPTOMS */}
+//                     <div className="grid sm:grid-cols-2 gap-4">
+//                         <AnimatePresence>
+//                             {filteredSymptoms.map(s => {
+//                                 const selected = selections.find(x => x.id === s.id);
+
+//                                 return (
+//                                     <motion.div
+//                                         key={s.id}
+//                                         layout
+//                                         initial={{ opacity: 0 }}
+//                                         animate={{ opacity: 1 }}
+//                                         exit={{ opacity: 0 }}
+//                                         onClick={() => toggleSymptom(s.id)}
+//                                         className={`p-4 rounded-xl cursor-pointer border transition ${selected
+//                                             ? 'bg-blue-600/10 border-blue-500'
+//                                             : 'bg-slate-900 border-slate-700 hover:border-slate-500'
+//                                             }`}
+//                                     >
+//                                         <div className="flex gap-3">
+//                                             {getSymptomIcon(s.name)}
+
+//                                             <div className="flex-1">
+//                                                 <div className="flex justify-between items-center">
+//                                                     <span className="text-white text-sm font-medium">
+//                                                         {s.name}
+//                                                     </span>
+//                                                     {selected && <CheckCircle2 size={16} className="text-blue-400" />}
+//                                                 </div>
+
+//                                                 <p className="text-xs text-slate-400 mt-1">
+//                                                     {s.desc}
+//                                                 </p>
+//                                             </div>
+//                                         </div>
+
+//                                         {/* SEVERITY */}
+//                                         {selected && (
+//                                             <div
+//                                                 className="mt-3 flex gap-2"
+//                                                 onClick={(e) => e.stopPropagation()}
+//                                             >
+//                                                 {['mild', 'moderate', 'severe'].map(sev => (
+//                                                     <button
+//                                                         key={sev}
+//                                                         onClick={() => updateSeverity(s.id, sev)}
+//                                                         className={`px-2 py-1 text-xs rounded-md ${selected.severity === sev
+//                                                             ? 'bg-blue-600 text-white'
+//                                                             : 'bg-slate-800 text-slate-300'
+//                                                             }`}
+//                                                     >
+//                                                         {sev}
+//                                                     </button>
+//                                                 ))}
+//                                             </div>
+//                                         )}
+//                                     </motion.div>
+//                                 );
+//                             })}
+//                         </AnimatePresence>
+//                     </div>
+//                 </div>
+
+//                 {/* RIGHT PANEL */}
+//                 <div className="space-y-4">
+
+//                     <div className="p-5 rounded-xl bg-slate-900 border border-slate-700">
+//                         <div className="flex justify-between mb-4">
+//                             <h3 className="text-white font-medium">
+//                                 Analysis
+//                             </h3>
+//                             {evaluating && <span className="text-xs text-slate-400">...</span>}
+//                         </div>
+
+//                         {results.length === 0 ? (
+//                             <p className="text-sm text-slate-400">
+//                                 No results yet
+//                             </p>
+//                         ) : (
+//                             results.map(r => (
+//                                 <div key={r.id} className="mb-4">
+//                                     <div className="flex justify-between text-sm text-white">
+//                                         <span>{r.name}</span>
+//                                         <span>{Math.round(r.probability)}%</span>
+//                                     </div>
+
+//                                     <div className="h-2 bg-slate-700 rounded-full mt-1">
+//                                         <div
+//                                             className="h-2 bg-blue-500 rounded-full"
+//                                             style={{ width: `${r.probability}%` }}
+//                                         />
+//                                     </div>
+
+//                                     {r.confidence.is_low && (
+//                                         <div className="text-xs text-yellow-400 mt-1 flex items-center gap-1">
+//                                             <ShieldAlert size={12} />
+//                                             Low confidence
+//                                         </div>
+//                                     )}
+//                                 </div>
+//                             ))
+//                         )}
+//                     </div>
+
+//                     <button
+//                         disabled={!selections.length}
+//                         onClick={() => onComplete(results, selections)}
+//                         className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+//                     >
+//                         Continue
+//                         <ChevronRight size={18} />
+//                     </button>
+//                 </div>
+//             </div>
+//         </div>
+//     );
+// }
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { analyzeSymptoms } from '../../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Stethoscope, Activity, CheckCircle2,
-    ChevronRight, BrainCircuit,
-    Search, ShieldAlert,
-    Wind, Droplets, Eye, ZapOff, Heart
+    Stethoscope, CheckCircle2, Search, ChevronRight,
+    BrainCircuit, ShieldAlert, Activity, Wind,
+    Droplets, Eye, ZapOff, Heart
 } from 'lucide-react';
 
 export default function SymptomChecker({ userId, onComplete }) {
@@ -596,12 +859,16 @@ export default function SymptomChecker({ userId, onComplete }) {
     const [evaluating, setEvaluating] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState("all");
+    const [focusedField, setFocusedField] = useState(null);
 
+    // Fetch symptom library
     useEffect(() => {
         const fetchLibrary = async () => {
             try {
                 const response = await analyzeSymptoms([]);
                 setLibrary(response.symptom_library || []);
+            } catch (err) {
+                console.error("Failed to load symptom library", err);
             } finally {
                 setLoading(false);
             }
@@ -609,6 +876,7 @@ export default function SymptomChecker({ userId, onComplete }) {
         fetchLibrary();
     }, []);
 
+    // Unified symptom list
     const allSymptoms = useMemo(() => {
         const list = (library || []).flatMap(d =>
             d.symptoms.map(s => ({ ...s, categoryId: d.id }))
@@ -616,6 +884,7 @@ export default function SymptomChecker({ userId, onComplete }) {
         return Array.from(new Map(list.map(s => [s.id, s])).values());
     }, [library]);
 
+    // Filtered symptoms
     const filteredSymptoms = useMemo(() => {
         return allSymptoms.filter(s =>
             (s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -624,18 +893,25 @@ export default function SymptomChecker({ userId, onComplete }) {
         );
     }, [allSymptoms, searchQuery, activeCategory]);
 
+    // Live analysis
     useEffect(() => {
-        const t = setTimeout(async () => {
-            if (!selections.length) return setResults([]);
+        const timer = setTimeout(async () => {
+            if (!selections.length) {
+                setResults([]);
+                return;
+            }
             setEvaluating(true);
             try {
                 const res = await analyzeSymptoms(selections, userId);
                 setResults(res.results || []);
+            } catch (err) {
+                console.error("Analysis failed", err);
             } finally {
                 setEvaluating(false);
             }
         }, 400);
-        return () => clearTimeout(t);
+
+        return () => clearTimeout(timer);
     }, [selections, userId]);
 
     const toggleSymptom = (id) => {
@@ -652,190 +928,273 @@ export default function SymptomChecker({ userId, onComplete }) {
 
     const getSymptomIcon = (name) => {
         const n = name.toLowerCase();
-        if (n.includes('breath') || n.includes('cough')) return <Wind className="w-5 h-5 text-sky-400" />;
-        if (n.includes('heart') || n.includes('chest')) return <Heart className="w-5 h-5 text-rose-400" />;
-        if (n.includes('weight') || n.includes('thirst')) return <Droplets className="w-5 h-5 text-blue-400" />;
-        if (n.includes('vision') || n.includes('eye')) return <Eye className="w-5 h-5 text-purple-400" />;
-        if (n.includes('fatigue')) return <ZapOff className="w-5 h-5 text-yellow-400" />;
-        return <Activity className="w-5 h-5 text-slate-400" />;
+        if (n.includes('breath') || n.includes('cough')) return <Wind className="w-5 h-5" style={{ color: '#5C766D' }} />;
+        if (n.includes('heart') || n.includes('chest')) return <Heart className="w-5 h-5" style={{ color: '#C9996B' }} />;
+        if (n.includes('weight') || n.includes('thirst')) return <Droplets className="w-5 h-5" style={{ color: '#5C4F4A' }} />;
+        if (n.includes('vision') || n.includes('eye')) return <Eye className="w-5 h-5" style={{ color: '#5C766D' }} />;
+        if (n.includes('fatigue')) return <ZapOff className="w-5 h-5" style={{ color: '#C9996B' }} />;
+        return <Activity className="w-5 h-5" style={{ color: '#5C4F4A80' }} />;
     };
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-[60vh] text-slate-400 text-lg">
-                Loading symptoms...
+            <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#EDE9E6' }}>
+                <div className="flex flex-col items-center">
+                    <div className="p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg, #5C766D 0%, #5C4F4A 100%)' }}>
+                        <Stethoscope className="w-10 h-10 text-white" />
+                    </div>
+                    <p className="mt-6 text-sm" style={{ color: '#5C4F4A', opacity: 0.7 }}>
+                        Loading symptom library...
+                    </p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="max-w-6xl mx-auto px-4 py-8">
-
-            {/* HEADER */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-semibold text-white mb-1">
-                    Symptom Checker
-                </h1>
-                <p className="text-slate-400 text-sm">
-                    Select your symptoms to get instant analysis
-                </p>
-            </div>
-
-            {/* SEARCH */}
-            <div className="relative mb-6">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input
-                    type="text"
-                    placeholder="Search symptoms..."
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
-            </div>
-
-            <div className="grid lg:grid-cols-3 gap-6">
-
-                {/* LEFT */}
-                <div className="lg:col-span-2 space-y-5">
-
-                    {/* CATEGORY */}
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            onClick={() => setActiveCategory('all')}
-                            className={`px-3 py-1.5 text-sm rounded-lg ${activeCategory === 'all'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-slate-800 text-slate-300'
-                                }`}
+        <div className="min-h-screen py-10 px-6" style={{ backgroundColor: '#EDE9E6' }}>
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-10 text-center"
+                >
+                    <div className="flex justify-center mb-4">
+                        <div
+                            className="p-4 rounded-2xl shadow-lg"
+                            style={{
+                                background: 'linear-gradient(135deg, #5C766D 0%, #5C4F4A 100%)',
+                            }}
                         >
-                            All
-                        </button>
+                            <Stethoscope className="w-9 h-9 text-white" />
+                        </div>
+                    </div>
+                    <h1 className="text-3xl font-bold mb-2" style={{ color: '#5C4F4A' }}>
+                        Symptom Checker
+                    </h1>
+                    <p className="text-sm max-w-md mx-auto" style={{ color: '#5C4F4A', opacity: 0.7 }}>
+                        Select symptoms you're experiencing. Our AI will analyze patterns in real-time.
+                    </p>
+                </motion.div>
 
-                        {library.map(cat => (
+                <div className="grid lg:grid-cols-12 gap-8">
+                    {/* Main Content Area */}
+                    <div className="lg:col-span-8 space-y-8">
+                        {/* Search Bar */}
+                        <motion.div
+                            className="relative"
+                            animate={{ scale: focusedField === 'search' ? 1.01 : 1 }}
+                        >
+                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                <Search className="w-5 h-5" style={{ color: focusedField === 'search' ? '#C9996B' : '#5C4F4A80' }} />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search symptoms or conditions..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => setFocusedField('search')}
+                                onBlur={() => setFocusedField(null)}
+                                className="w-full pl-14 pr-6 py-4 rounded-2xl font-medium outline-none transition-all"
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    border: focusedField === 'search' ? '2px solid #C9996B' : '2px solid transparent',
+                                    boxShadow: focusedField === 'search' ? '0 0 0 4px rgba(201, 153, 107, 0.15)' : 'none',
+                                    color: '#5C4F4A',
+                                }}
+                            />
+                        </motion.div>
+
+                        {/* Category Tabs */}
+                        <div className="flex flex-wrap gap-2">
                             <button
-                                key={cat.id}
-                                onClick={() => setActiveCategory(cat.id)}
-                                className={`px-3 py-1.5 text-sm rounded-lg ${activeCategory === cat.id
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-800 text-slate-300'
-                                    }`}
+                                onClick={() => setActiveCategory('all')}
+                                className={`px-5 py-2 text-sm font-semibold rounded-2xl transition-all`}
+                                style={{
+                                    background: activeCategory === 'all' ? '#5C766D' : '#FFFFFF',
+                                    color: activeCategory === 'all' ? '#FFFFFF' : '#5C4F4A',
+                                    border: activeCategory === 'all' ? 'none' : '1px solid rgba(92,79,74,0.1)',
+                                }}
                             >
-                                {cat.name}
+                                All Symptoms
                             </button>
-                        ))}
-                    </div>
-
-                    {/* SYMPTOMS */}
-                    <div className="grid sm:grid-cols-2 gap-4">
-                        <AnimatePresence>
-                            {filteredSymptoms.map(s => {
-                                const selected = selections.find(x => x.id === s.id);
-
-                                return (
-                                    <motion.div
-                                        key={s.id}
-                                        layout
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        onClick={() => toggleSymptom(s.id)}
-                                        className={`p-4 rounded-xl cursor-pointer border transition ${selected
-                                            ? 'bg-blue-600/10 border-blue-500'
-                                            : 'bg-slate-900 border-slate-700 hover:border-slate-500'
-                                            }`}
-                                    >
-                                        <div className="flex gap-3">
-                                            {getSymptomIcon(s.name)}
-
-                                            <div className="flex-1">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-white text-sm font-medium">
-                                                        {s.name}
-                                                    </span>
-                                                    {selected && <CheckCircle2 size={16} className="text-blue-400" />}
-                                                </div>
-
-                                                <p className="text-xs text-slate-400 mt-1">
-                                                    {s.desc}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* SEVERITY */}
-                                        {selected && (
-                                            <div
-                                                className="mt-3 flex gap-2"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {['mild', 'moderate', 'severe'].map(sev => (
-                                                    <button
-                                                        key={sev}
-                                                        onClick={() => updateSeverity(s.id, sev)}
-                                                        className={`px-2 py-1 text-xs rounded-md ${selected.severity === sev
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'bg-slate-800 text-slate-300'
-                                                            }`}
-                                                    >
-                                                        {sev}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </motion.div>
-                                );
-                            })}
-                        </AnimatePresence>
-                    </div>
-                </div>
-
-                {/* RIGHT PANEL */}
-                <div className="space-y-4">
-
-                    <div className="p-5 rounded-xl bg-slate-900 border border-slate-700">
-                        <div className="flex justify-between mb-4">
-                            <h3 className="text-white font-medium">
-                                Analysis
-                            </h3>
-                            {evaluating && <span className="text-xs text-slate-400">...</span>}
+                            {library.map(cat => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setActiveCategory(cat.id)}
+                                    className={`px-5 py-2 text-sm font-semibold rounded-2xl transition-all`}
+                                    style={{
+                                        background: activeCategory === cat.id ? '#5C766D' : '#FFFFFF',
+                                        color: activeCategory === cat.id ? '#FFFFFF' : '#5C4F4A',
+                                        border: activeCategory === cat.id ? 'none' : '1px solid rgba(92,79,74,0.1)',
+                                    }}
+                                >
+                                    {cat.name}
+                                </button>
+                            ))}
                         </div>
 
-                        {results.length === 0 ? (
-                            <p className="text-sm text-slate-400">
-                                No results yet
-                            </p>
-                        ) : (
-                            results.map(r => (
-                                <div key={r.id} className="mb-4">
-                                    <div className="flex justify-between text-sm text-white">
-                                        <span>{r.name}</span>
-                                        <span>{Math.round(r.probability)}%</span>
-                                    </div>
+                        {/* Symptoms Grid */}
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <AnimatePresence mode="popLayout">
+                                {filteredSymptoms.map((s) => {
+                                    const selected = selections.find(x => x.id === s.id);
+                                    const currentSeverity = selected?.severity || 'mild';
 
-                                    <div className="h-2 bg-slate-700 rounded-full mt-1">
-                                        <div
-                                            className="h-2 bg-blue-500 rounded-full"
-                                            style={{ width: `${r.probability}%` }}
-                                        />
-                                    </div>
+                                    return (
+                                        <motion.div
+                                            key={s.id}
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            onClick={() => toggleSymptom(s.id)}
+                                            className={`p-6 rounded-3xl cursor-pointer transition-all border group`}
+                                            style={{
+                                                backgroundColor: selected ? '#C9996B10' : '#FFFFFF',
+                                                border: selected
+                                                    ? '2px solid #C9996B'
+                                                    : '2px solid rgba(92,79,74,0.08)',
+                                            }}
+                                        >
+                                            <div className="flex gap-4">
+                                                <div className={`p-3 rounded-2xl transition-all flex-shrink-0 ${selected ? 'bg-[#C9996B20]' : 'bg-[#EDE9E6]'}`}>
+                                                    {getSymptomIcon(s.name)}
+                                                </div>
 
-                                    {r.confidence.is_low && (
-                                        <div className="text-xs text-yellow-400 mt-1 flex items-center gap-1">
-                                            <ShieldAlert size={12} />
-                                            Low confidence
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-start justify-between">
+                                                        <span className="font-semibold text-lg leading-tight" style={{ color: '#5C4F4A' }}>
+                                                            {s.name}
+                                                        </span>
+                                                        {selected && <CheckCircle2 className="w-5 h-5 mt-1" style={{ color: '#5C766D' }} />}
+                                                    </div>
+                                                    <p className="text-sm mt-2 leading-relaxed" style={{ color: '#5C4F4A80' }}>
+                                                        {s.desc}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Severity Selector */}
+                                            {selected && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    className="mt-5 pt-4 border-t border-[#C9996B30] flex flex-wrap gap-2"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {['mild', 'moderate', 'severe'].map((sev) => (
+                                                        <button
+                                                            key={sev}
+                                                            onClick={() => updateSeverity(s.id, sev)}
+                                                            className={`px-4 py-1.5 text-xs font-semibold rounded-xl transition-all`}
+                                                            style={{
+                                                                background: currentSeverity === sev ? '#5C766D' : '#EDE9E6',
+                                                                color: currentSeverity === sev ? '#FFFFFF' : '#5C4F4A',
+                                                            }}
+                                                        >
+                                                            {sev.charAt(0).toUpperCase() + sev.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </motion.div>
+                                    );
+                                })}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                    {/* Live Analysis Sidebar */}
+                    <div className="lg:col-span-4">
+                        <div className="sticky top-8 space-y-6">
+                            {/* Analysis Card */}
+                            <div
+                                className="rounded-3xl p-8 shadow-xl overflow-hidden"
+                                style={{
+                                    backgroundColor: '#FFFFFF',
+                                    boxShadow: '0 25px 50px -12px rgba(92, 79, 74, 0.15)',
+                                }}
+                            >
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <BrainCircuit className="w-6 h-6" style={{ color: '#5C766D' }} />
+                                        <h3 className="font-bold text-xl" style={{ color: '#5C4F4A' }}>Live Analysis</h3>
+                                    </div>
+                                    {evaluating && (
+                                        <div className="text-xs px-3 py-1 rounded-full" style={{ background: '#C9996B20', color: '#C9996B' }}>
+                                            Analyzing...
                                         </div>
                                     )}
                                 </div>
-                            ))
-                        )}
-                    </div>
 
-                    <button
-                        disabled={!selections.length}
-                        onClick={() => onComplete(results, selections)}
-                        className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                        Continue
-                        <ChevronRight size={18} />
-                    </button>
+                                {results.length === 0 ? (
+                                    <div className="py-16 text-center">
+                                        <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: '#EDE9E6' }}>
+                                            <Activity className="w-8 h-8" style={{ color: '#5C4F4A80' }} />
+                                        </div>
+                                        <p className="text-sm" style={{ color: '#5C4F4A80' }}>
+                                            Select symptoms to see potential conditions
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        {results.map((res, i) => (
+                                            <motion.div
+                                                key={res.id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="p-5 rounded-2xl border"
+                                                style={{
+                                                    borderColor: i === 0 ? '#C9996B40' : 'rgba(92,79,74,0.1)',
+                                                    background: i === 0 ? '#C9996B05' : '#F8F4F0',
+                                                }}
+                                            >
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <span className="font-semibold" style={{ color: '#5C4F4A' }}>{res.name}</span>
+                                                    <span className="text-2xl font-bold" style={{ color: '#5C4F4A' }}>
+                                                        {Math.round(res.probability)}%
+                                                    </span>
+                                                </div>
+                                                <div className="h-2 bg-[#EDE9E6] rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${res.probability}%` }}
+                                                        className="h-full rounded-full"
+                                                        style={{ background: '#C9996B' }}
+                                                    />
+                                                </div>
+                                                {res.confidence?.is_low && (
+                                                    <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: '#C9996B' }}>
+                                                        <ShieldAlert size={14} />
+                                                        Low confidence match
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Continue Button */}
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                disabled={!selections.length}
+                                onClick={() => onComplete(results, selections)}
+                                className="w-full py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all disabled:opacity-50"
+                                style={{
+                                    background: 'linear-gradient(135deg, #C9996B 0%, #5C4F4A 100%)',
+                                    color: '#FFFFFF',
+                                    boxShadow: '0 15px 35px -10px rgba(201, 153, 107, 0.4)',
+                                }}
+                            >
+                                Generate Full Report
+                                <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                            </motion.button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

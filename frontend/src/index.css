@@ -1,8 +1,4 @@
 /* 
-@tailwind base;
-@tailwind components;
-@tailwind utilities; */
-
 @import "tailwindcss";
 
 @layer base {
@@ -40,7 +36,6 @@
   }
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -58,7 +53,6 @@
   background: #475569;
 }
 
-/* Range input styling */
 input[type=range] {
   -webkit-appearance: none;
   background: transparent;
@@ -72,9 +66,127 @@ input[type=range]:focus {
   outline: none;
 }
 
-/* Base styles for dark theme forms */
+
 input[type="number"],
 input[type="text"],
 select {
   @apply bg-slate-900/50 border border-slate-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-300;
+} */
+
+
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-[#EDE9E6] text-[#5C4F4A] font-sans min-h-screen antialiased overflow-x-hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(92, 79, 74, 0.1);
+    box-shadow: 0 10px 30px -10px rgba(92, 79, 74, 0.15);
+  }
+
+  /* Warm neon glows */
+  .neon-glow {
+    box-shadow: 0 0 15px rgba(201, 153, 107, 0.4),
+      inset 0 0 10px rgba(201, 153, 107, 0.15);
+  }
+
+  .neon-glow-blue {
+    box-shadow: 0 0 15px rgba(92, 118, 109, 0.5),
+      inset 0 0 10px rgba(92, 118, 109, 0.2);
+  }
+
+  .neon-glow-amber {
+    box-shadow: 0 0 15px rgba(201, 153, 107, 0.5),
+      inset 0 0 10px rgba(201, 153, 107, 0.2);
+  }
+
+  .neon-border {
+    border: 1px solid rgba(201, 153, 107, 0.3);
+    box-shadow: 0 0 12px rgba(201, 153, 107, 0.25);
+  }
+
+  .neon-text-glow {
+    text-shadow: 0 0 8px rgba(201, 153, 107, 0.4);
+  }
+}
+
+/* Custom Scrollbar - Warm Theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #EDE9E6;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C9996B40;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C9996B70;
+}
+
+/* Range Input Styling */
+input[type=range] {
+  -webkit-appearance: none;
+  background: transparent;
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  background: #EDE9E6;
+  height: 6px;
+  border-radius: 9999px;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  background: #5C766D;
+  border-radius: 9999px;
+  cursor: pointer;
+  margin-top: -6px;
+  box-shadow: 0 2px 8px rgba(92, 118, 109, 0.3);
+}
+
+input[type=range]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px rgba(201, 153, 107, 0.2);
+}
+
+/* Form Input & Select Base Styling - Warm Theme */
+input[type="number"],
+input[type="text"],
+input[type="password"],
+select {
+  background-color: #FFFFFF;
+  border: 2px solid transparent;
+  color: #5C4F4A;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+select:focus {
+  border-color: #C9996B;
+  box-shadow: 0 0 0 4px rgba(201, 153, 107, 0.15);
+  outline: none;
+}
+
+/* Placeholder Styling */
+input::placeholder,
+select option:disabled {
+  color: #5C4F4A60;
 }
