@@ -57,3 +57,30 @@ export const predictRisk = async (diseaseType, data, user_id = null) => {
     throw new Error('Failed to connect to the prediction servers.');
   }
 };
+
+export const getGeminiRecommendations = async (formData, riskPercentage, diseaseType) => {
+  try {
+    const payload = { ...formData, risk_percentage: riskPercentage, disease: diseaseType };
+    const response = await axios.post(`${API_URL}/api/recommendations`, payload);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.error || "Failed to fetch LLM recommendations";
+  }
+};
+
+export const getNearbyHospitals = async (lat, lon) => {
+  try {
+    const response = await axios.get(`${API_URL}/api/nearby-hospitals?lat=${lat}&lon=${lon}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.error || "Failed to find nearby hospitals";
+  }
+};
+export const analyzeSymptoms = async (selected_symptoms, user_id = null) => {
+  try {
+    const response = await axios.post(`${API_URL}/api/analyze-symptoms`, { selected_symptoms, user_id });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.error || "Symptom analysis failed";
+  }
+};

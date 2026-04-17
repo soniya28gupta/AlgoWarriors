@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle, BrainCircuit, Apple, HeartPulse, Moon, Stethoscope, Hexagon, FileText, Download } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
+import { MapPin, Activity, AlertTriangle, CheckCircle, Info, TrendingUp, XCircle, BrainCircuit, Apple, HeartPulse, Moon, Stethoscope, Hexagon, FileText, Download, FlameKindling, Info as InfoIcon } from 'lucide-react';
 import { getHistory } from '../../services/api';
 import { generateDoctorReport } from '../../utils/pdfGenerator';
+import RecommendationDashboard from './RecommendationDashboard';
+import HospitalMap from './HospitalMap';
 
 const generateTrendData = (currentRisk) => {
   return Array.from({ length: 6 }).map((_, i) => ({
@@ -73,13 +75,14 @@ const CircularProgress = ({ percentage, color, label = "Risk" }) => {
 export default function ResultDashboard({ result, formData, diseaseType, onReset }) {
   const { risk_percentage, risk_level, care_plan, stroke_risk } = result;
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   const colorMap = {
     Low: '#22c55e',    // Green
     Medium: '#eab308', // Yellow
     High: '#ef4444',   // Red
   };
-  
+
   const iconMap = {
     Low: <CheckCircle className="w-6 h-6 text-green-500" />,
     Medium: <AlertTriangle className="w-6 h-6 text-yellow-500" />,
@@ -116,11 +119,11 @@ export default function ResultDashboard({ result, formData, diseaseType, onReset
       const userId = localStorage.getItem('user_id');
       let historyData = [];
       let username = "Anonymous";
-      
+
       if (userId) {
-          const apiRes = await getHistory(userId);
-          historyData = apiRes.history || [];
-          username = apiRes.username || "Anonymous";
+        const apiRes = await getHistory(userId);
+        historyData = apiRes.history || [];
+        username = apiRes.username || "Anonymous";
       }
 
       generateDoctorReport(username, diseaseType || "Health", formData || {}, result, historyData);
@@ -144,30 +147,33 @@ export default function ResultDashboard({ result, formData, diseaseType, onReset
         {/* Main Score Card */}
         <div className="col-span-1 xl:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group border border-slate-700/50">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          
+
           <div className="flex flex-col md:flex-row items-center justify-between z-10 relative">
             <div className="space-y-4 mb-6 md:mb-0 max-w-sm">
               <div className="flex items-center space-x-3">
                 <Activity className="w-8 h-8 text-blue-400" />
                 <h2 className="text-2xl font-bold">Health Assessment</h2>
               </div>
-              
+
               <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full glass-panel border border-slate-700/50 shadow-lg">
                 {iconMap[risk_level]}
                 <span className="font-semibold tracking-wide" style={{ color }}>{risk_level} Risk Stage</span>
               </div>
-              
+
               <p className="text-slate-300 mt-4 text-sm leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
-                {care_plan?.analysis || "NeuraHealth engine complete. Analysis computed securely against population baselines."}
+                {result.is_symptom_only ?
+                  "Statistical weighted match based on clinical symptom protocols." :
+                  (care_plan?.analysis || "NeuraHealth engine complete. Analysis computed securely against population baselines.")
+                }
               </p>
             </div>
-            
+
             <div className="flex space-x-6 items-center">
               <CircularProgress percentage={risk_percentage} color={color} label="Base Risk" />
-              
+
               {/* Optional Stroke Risk */}
               {stroke_risk !== undefined && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.5, duration: 0.8 }}
@@ -187,57 +193,69 @@ export default function ResultDashboard({ result, formData, diseaseType, onReset
           </div>
         </div>
 
-        {/* Trend Graph */}
-        <div className="col-span-1 glass-panel rounded-2xl p-6 flex flex-col relative overflow-hidden border border-slate-700/50">
-          {stroke_risk > 70 && (
-             <div className="absolute inset-0 bg-red-500/10 animate-pulse pointer-events-none"></div>
-          )}
-          <div className="flex items-center justify-between mb-4 z-10">
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-purple-400" />
-              <h3 className="font-semibold">6-Month Trajectory</h3>
+        {/* Cross-Disease Analysis (Symptom Mode Only) */}
+        {result.is_symptom_only && result.all_symptom_matches?.length > 1 && (
+          <div className="col-span-1 xl:col-span-3 glass-panel rounded-2xl p-6 border border-white/5 bg-slate-900/60 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-3xl -z-10" />
+            <div className="flex items-center space-x-2 mb-4">
+              <FlameKindling className="w-5 h-5 text-amber-500" />
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest leading-none">Associated Risk Patterns Detected</h3>
             </div>
-            {stroke_risk !== undefined && (
-              <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700">Dual Model</span>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {result.all_symptom_matches.slice(1).map((m, i) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 + (i * 0.1) }}
+                  className="p-4 rounded-xl bg-slate-800/40 border border-white/5 hover:border-amber-500/30 transition-all group"
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-tight">{m.name}</span>
+                    <span className="text-lg font-black text-white">{Math.round(m.probability)}%</span>
+                  </div>
+                  <div className="h-1 w-full bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]" style={{ width: `${m.probability}%` }} />
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-[10px] text-slate-500 line-clamp-1 italic">Common: {m.matched_symptoms.slice(0, 3).join(", ")}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/5 flex items-center space-x-2">
+              <InfoIcon className="w-4 h-4 text-slate-500" />
+              <p className="text-[10px] text-slate-500 italic uppercase font-bold tracking-tight">System identified overlapping indicators across multiple diagnostic sectors.</p>
+            </div>
           </div>
-          <div className="flex-1 min-h-[150px] w-full z-10">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }} />
-                <Area type="monotone" dataKey="risk" stroke={color} fillOpacity={1} fill="url(#colorRisk)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        )}
+
+
       </div>
 
       {stroke_risk !== undefined && stroke_risk > 35 && (
-        <motion.div 
-           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
-           className="glass-panel p-6 border-red-500/40 bg-red-900/10 rounded-2xl flex flex-col sm:flex-row items-center sm:space-x-6 space-y-4 sm:space-y-0"
+        <motion.div
+          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
+          className="glass-panel p-6 border-red-500/40 bg-red-900/10 rounded-2xl flex flex-col sm:flex-row items-center sm:space-x-6 space-y-4 sm:space-y-0"
         >
-           <div className="flex-shrink-0 w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30 neon-glow-red">
-             <AlertTriangle className="w-8 h-8 text-red-500" />
-           </div>
-           <div>
-             <h3 className="text-lg font-bold text-red-400 mb-1">Near-Future Stroke Warning Triggered</h3>
-             <p className="text-slate-300 text-sm leading-relaxed">
-               The advanced cerebrovascular mapping model has detected an elevated stroke vulnerability pattern explicitly linked to your profile parameters. Immediate review of the actionable items below is strongly advised.
-             </p>
-           </div>
+          <div className="flex-shrink-0 w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30 neon-glow-red">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-red-400 mb-1">Near-Future Stroke Warning Triggered</h3>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              The advanced cerebrovascular mapping model has detected an elevated stroke vulnerability pattern explicitly linked to your profile parameters. Immediate review of the actionable items below is strongly advised.
+            </p>
+          </div>
         </motion.div>
       )}
 
+      {/* Logics & Computations (Symptom Assessments only) */}
+
+
       {/* AI Personalized Care Plan */}
       <div className="glass-panel rounded-2xl p-8 relative overflow-hidden border border-slate-700/50">
-        <motion.div 
+        <motion.div
           animate={{ y: ["0%", "100%", "0%"] }}
           transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
           className="absolute top-0 left-0 w-1 h-32 bg-gradient-to-b from-transparent via-cyan-400 to-transparent neon-glow-cyan opacity-50"
@@ -252,27 +270,52 @@ export default function ResultDashboard({ result, formData, diseaseType, onReset
           </h3>
         </div>
 
-        <motion.div 
+        <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="grid grid-cols-1 md:grid-cols-2 gap-6"
         >
           {guidanceCards.map((card, idx) => (
-            <motion.div 
+            <motion.div
               key={idx}
               variants={itemVariants}
               className={`flex flex-col space-y-3 bg-slate-800/40 p-5 rounded-xl border ${card.border} hover:bg-slate-700/40 transition-colors`}
             >
               <div className="flex items-center space-x-3 mb-2">
-                 <card.icon className={`w-5 h-5 ${card.color}`} />
-                 <h4 className="font-semibold text-slate-200 tracking-wide">{card.title}</h4>
+                <card.icon className={`w-5 h-5 ${card.color}`} />
+                <h4 className="font-semibold text-slate-200 tracking-wide">{card.title}</h4>
               </div>
               <p className="text-slate-400 leading-relaxed font-light text-sm pl-8 border-l-2 border-slate-700/50">{card.text}</p>
             </motion.div>
           ))}
         </motion.div>
       </div>
+
+      {/* Emergency Map Launcher */}
+      <div className="flex justify-center mt-8">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowMap(true)}
+          className="group relative flex items-center space-x-4 px-12 py-5 bg-slate-900 border border-rose-500/30 rounded-3xl overflow-hidden shadow-[0_0_30px_rgba(244,63,94,0.15)] transition-all hover:border-rose-500/60 hover:shadow-[0_0_40px_rgba(244,63,94,0.25)]"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-rose-600/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center border border-rose-500/20 group-hover:scale-110 transition-transform">
+            <MapPin className="w-7 h-7 text-rose-500 animate-pulse" />
+          </div>
+          <div className="text-left">
+            <span className="block text-[10px] font-black uppercase tracking-[0.2em] text-rose-400 leading-none mb-1.5">Critical Infrastructure</span>
+            <span className="block text-lg font-extrabold text-white tracking-tight">Locate Nearest Hospital Now</span>
+          </div>
+        </motion.button>
+      </div>
+
+      <AnimatePresence>
+        {showMap && <HospitalMap onClose={() => setShowMap(false)} />}
+      </AnimatePresence>
+
+      <RecommendationDashboard formData={formData} riskPercentage={risk_percentage} diseaseType={diseaseType} />
 
       <div className="flex flex-col sm:flex-row items-center justify-center pt-4 space-y-4 sm:space-y-0 sm:space-x-6 border-t border-slate-700/50 mt-8">
         <motion.button
@@ -283,13 +326,13 @@ export default function ResultDashboard({ result, formData, diseaseType, onReset
           className="flex items-center space-x-2 px-8 py-3.5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 border border-purple-500/50 text-white font-bold transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] disabled:opacity-50"
         >
           {isGeneratingPdf ? (
-             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
-             <>
-               <FileText className="w-5 h-5" />
-               <span>Download Doctor-Ready PDF</span>
-               <Download className="w-4 h-4 ml-1 opacity-70" />
-             </>
+            <>
+              <FileText className="w-5 h-5" />
+              <span>Download Doctor-Ready PDF</span>
+              <Download className="w-4 h-4 ml-1 opacity-70" />
+            </>
           )}
         </motion.button>
 

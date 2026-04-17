@@ -2,6 +2,68 @@ import React, { useState } from 'react';
 import { Activity, HeartPulse, User, PlusCircle, MinusCircle, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const InputField = ({ label, name, type = "number", icon: Icon, placeholder, step, formData, onChange }) => (
+  <div className="relative group">
+    <label className="block text-sm font-medium text-slate-400 mb-1 ml-1 group-focus-within:text-blue-400 transition-colors">{label}</label>
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Icon className="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+      </div>
+      <input
+        type={type}
+        name={name}
+        step={step}
+        value={formData[name] || ''}
+        onChange={onChange}
+        className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-medium glow-input hover:border-slate-600"
+        placeholder={placeholder}
+      />
+    </div>
+  </div>
+);
+
+const SelectMenu = ({ label, name, options, formData, onChange }) => (
+  <div className="relative group">
+    <label className="block text-sm font-medium text-slate-400 mb-1 ml-1 group-focus-within:text-blue-400 transition-colors">{label}</label>
+    <select
+      name={name}
+      value={formData[name] || ''}
+      onChange={onChange}
+      className="block w-full px-4 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-slate-100 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-medium glow-input hover:border-slate-600 appearance-none"
+    >
+      <option value="" disabled>Select Option</option>
+      {options.map(opt => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const ToggleBtn = ({ name, label, formData, setFormData }) => {
+  const isYes = formData[name] === '1';
+  return (
+    <div className="flex flex-col space-y-2">
+      <span className="text-sm font-medium text-slate-400">{label}</span>
+      <div className="flex bg-slate-800/50 rounded-xl p-1 border border-slate-700">
+        <button
+          type="button"
+          onClick={() => setFormData({ ...formData, [name]: '1' })}
+          className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${isYes ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          Yes
+        </button>
+        <button
+          type="button"
+          onClick={() => setFormData({ ...formData, [name]: '0' })}
+          className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${!isYes && formData[name] !== undefined ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          No
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function HeartForm({ formData, setFormData }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -10,72 +72,10 @@ export default function HeartForm({ formData, setFormData }) {
     setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
   };
 
-  const InputField = ({ label, name, type = "number", icon: Icon, placeholder, step }) => (
-    <div className="relative group">
-      <label className="block text-sm font-medium text-slate-400 mb-1 ml-1 group-focus-within:text-blue-400 transition-colors">{label}</label>
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon className="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-        </div>
-        <input
-          type={type}
-          name={name}
-          step={step}
-          value={formData[name] || ''}
-          onChange={handleChange}
-          className="block w-full pl-10 pr-3 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-slate-100 placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-medium glow-input hover:border-slate-600"
-          placeholder={placeholder}
-        />
-      </div>
-    </div>
-  );
-
-  const SelectMenu = ({ label, name, options }) => (
-    <div className="relative group">
-      <label className="block text-sm font-medium text-slate-400 mb-1 ml-1 group-focus-within:text-blue-400 transition-colors">{label}</label>
-      <select
-        name={name}
-        value={formData[name] || ''}
-        onChange={handleChange}
-        className="block w-full px-4 py-3 border border-slate-700 rounded-xl bg-slate-800/50 text-slate-100 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-medium glow-input hover:border-slate-600 appearance-none"
-      >
-        <option value="" disabled>Select Option</option>
-        {options.map(opt => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-    </div>
-  );
-
-  const ToggleBtn = ({ name, label }) => {
-    const isYes = formData[name] === '1';
-    return (
-      <div className="flex flex-col space-y-2">
-        <span className="text-sm font-medium text-slate-400">{label}</span>
-        <div className="flex bg-slate-800/50 rounded-xl p-1 border border-slate-700">
-          <button
-            type="button"
-            onClick={() => setFormData({ ...formData, [name]: '1' })}
-            className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${isYes ? 'bg-blue-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            onClick={() => setFormData({ ...formData, [name]: '0' })}
-            className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${!isYes && formData[name] !== undefined ? 'bg-slate-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            No
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Age" name="age" icon={User} placeholder="e.g. 45" />
+        <InputField label="Age" name="age" icon={User} placeholder="e.g. 45" formData={formData} onChange={handleChange} />
         <SelectMenu 
           label="Sex" 
           name="sex" 
@@ -83,6 +83,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Male', value: 'Male' },
             { label: 'Female', value: 'Female' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
       </div>
 
@@ -96,6 +97,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Non-anginal pain', value: 'Non-anginal pain' },
             { label: 'Asymptomatic', value: 'Asymptomatic' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
         <SelectMenu 
           label="Fasting Blood Sugar" 
@@ -104,17 +106,18 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Lower than 120 mg/ml', value: 'Lower than 120 mg/ml' },
             { label: 'Greater than 120 mg/ml', value: 'Greater than 120 mg/ml' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Resting Blood Pressure" name="resting_blood_pressure" icon={Activity} placeholder="Sys mmHg" />
-        <InputField label="Cholesterol" name="cholestoral" icon={Activity} placeholder="mg/dl" />
+        <InputField label="Resting Blood Pressure" name="resting_blood_pressure" icon={Activity} placeholder="Sys mmHg" formData={formData} onChange={handleChange} />
+        <InputField label="Cholesterol" name="cholestoral" icon={Activity} placeholder="mg/dl" formData={formData} onChange={handleChange} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Max Heart Rate" name="Max_heart_rate" icon={HeartPulse} placeholder="bpm" />
-        <InputField label="Oldpeak (ST Depression)" name="oldpeak" icon={Activity} placeholder="e.g. 1.5" step="0.1" />
+        <InputField label="Max Heart Rate" name="Max_heart_rate" icon={HeartPulse} placeholder="bpm" formData={formData} onChange={handleChange} />
+        <InputField label="Oldpeak (ST Depression)" name="oldpeak" icon={Activity} placeholder="e.g. 1.5" step="0.1" formData={formData} onChange={handleChange} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -126,6 +129,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'ST-T wave abnormality', value: 'ST-T wave abnormality' },
             { label: 'Left ventricular hypertrophy', value: 'Left ventricular hypertrophy' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
         <SelectMenu 
           label="Exercise Induced Angina" 
@@ -134,6 +138,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Yes', value: 'Yes' },
             { label: 'No', value: 'No' },
           ]} 
+          formData={formData} onChange={handleChange}
         />
       </div>
 
@@ -146,6 +151,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Flat', value: 'Flat' },
             { label: 'Downsloping', value: 'Downsloping' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
         <SelectMenu 
           label="Major Vessels" 
@@ -157,6 +163,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Three', value: 'Three' },
             { label: 'Four', value: 'Four' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
         <SelectMenu 
           label="Thalassemia" 
@@ -167,6 +174,7 @@ export default function HeartForm({ formData, setFormData }) {
             { label: 'Reversable Defect', value: 'Reversable Defect' },
             { label: 'No', value: 'No' }
           ]} 
+          formData={formData} onChange={handleChange}
         />
       </div>
 
@@ -197,10 +205,10 @@ export default function HeartForm({ formData, setFormData }) {
                 </div>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                  <ToggleBtn name="currentSmoker" label="Current Smoker" />
-                  <ToggleBtn name="BPMeds" label="On BP Meds" />
-                  <ToggleBtn name="prevalentStroke" label="Prior Stroke" />
-                  <ToggleBtn name="prevalentHyp" label="Hypertension" />
+                  <ToggleBtn name="currentSmoker" label="Current Smoker" formData={formData} setFormData={setFormData} />
+                  <ToggleBtn name="BPMeds" label="On BP Meds" formData={formData} setFormData={setFormData} />
+                  <ToggleBtn name="prevalentStroke" label="Prior Stroke" formData={formData} setFormData={setFormData} />
+                  <ToggleBtn name="prevalentHyp" label="Hypertension" formData={formData} setFormData={setFormData} />
                 </div>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -213,12 +221,13 @@ export default function HeartForm({ formData, setFormData }) {
                       { label: 'Some College', value: '3' },
                       { label: 'College Grad+', value: '4' }
                     ]}
+                    formData={formData} onChange={handleChange}
                   />
-                  <InputField label="Cigs Per Day" name="cigsPerDay" icon={Activity} placeholder="e.g. 10" />
-                  <InputField label="Diastolic BP" name="diaBP" icon={Activity} placeholder="Dia mmHg" />
-                  <InputField label="BMI" name="BMI" icon={User} placeholder="e.g. 24.5" step="0.1" />
-                  <InputField label="Glucose Level" name="glucose" icon={Activity} placeholder="mg/dl" />
-                  <ToggleBtn name="diabetes" label="Has Diabetes" />
+                  <InputField label="Cigs Per Day" name="cigsPerDay" icon={Activity} placeholder="e.g. 10" formData={formData} onChange={handleChange} />
+                  <InputField label="Diastolic BP" name="diaBP" icon={Activity} placeholder="Dia mmHg" formData={formData} onChange={handleChange} />
+                  <InputField label="BMI" name="BMI" icon={User} placeholder="e.g. 24.5" step="0.1" formData={formData} onChange={handleChange} />
+                  <InputField label="Glucose Level" name="glucose" icon={Activity} placeholder="mg/dl" formData={formData} onChange={handleChange} />
+                  <ToggleBtn name="diabetes" label="Has Diabetes"  formData={formData} setFormData={setFormData}/>
                 </div>
               </div>
             </motion.div>

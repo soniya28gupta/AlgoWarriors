@@ -8,10 +8,11 @@ import HeartForm from './components/forms/HeartForm';
 import CancerForm from './components/forms/CancerForm';
 import ResultDashboard from './components/ui/ResultDashboard';
 import Loader from './components/ui/Loader';
-import { predictRisk } from './services/api';
 import AuthPage from './components/ui/AuthPage';
 import Onboarding from './components/ui/Onboarding';
 import ProfileHistory from './components/ui/ProfileHistory';
+import SymptomChecker from './components/ui/SymptomChecker';
+import { predictRisk, analyzeSymptoms } from './services/api';
 
 const DIABETES = 'diabetes';
 const HEART = 'heart';
@@ -29,9 +30,11 @@ const ProtectedRoute = ({ children }) => {
 const MainPredictor = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(DIABETES);
+  const [view, setView] = useState('clinical'); // 'clinical' or 'symptom'
   const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [symptomResult, setSymptomResult] = useState(null);
   
   const userId = localStorage.getItem('user_id');
 
@@ -44,6 +47,8 @@ const MainPredictor = () => {
   const handlePredict = async () => {
     setLoading(true);
     try {
+      // If we have symptom results, we can potentially pass them for hybrid (per plan)
+      // For now we'll stick to the clinical prediction
       const data = await predictRisk(activeTab, formData, userId);
       setResult(data);
     } catch (error) {
@@ -52,6 +57,28 @@ const MainPredictor = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSymptomComplete = (results, selectedIds) => {
+    // Navigate to a results view or stay on common ResultDashboard
+    // For simplicity, we'll map symptom results to the ResultDashboard format if it's the top match
+    if (results.length > 0) {
+        const top = results[0];
+        setResult({
+            risk_percentage: top.probability,
+            risk_level: top.risk_level,
+            care_plan: {
+                analysis: top.summary,
+                medical: `Top clinical correlation: ${top.name}. Differentiating factors identified: ${top.missing_key_symptoms.join(", ")}`,
+                diet: "See specific recommendations in progress below.",
+                exercise: "System recommends balanced cardio/resistance.",
+                lifestyle: "Continue regular screening."
+            },
+            is_symptom_only: true,
+            all_symptom_matches: results
+        });
+    }
+    setView('clinical'); // Return to main workspace
   };
 
   const handleLogout = () => {
@@ -113,14 +140,35 @@ const MainPredictor = () => {
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                   <span className="text-sm font-medium text-slate-300">System Online • Ready for Diagnostics</span>
                 </div>
-                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight glow-text">
-                  Choose Analysis Module
+                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight glow-text leading-tight">
+                  {view === 'clinical' ? 'Clinical Analysis Module' : 'Symptom-Based Analysis'}
                 </h2>
-                <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-                  Select a targeted diagnostic area to run our predictive models securely against your real-time input.
-                </p>
+                <div className="flex justify-center mt-6">
+                  <div className="inline-flex p-1 bg-slate-900/80 rounded-2xl border border-slate-700/50">
+                    <button 
+                      onClick={() => setView('clinical')}
+                      className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                        view === 'clinical' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      Clinical Inputs
+                    </button>
+                    <button 
+                      onClick={() => setView('symptom')}
+                      className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                        view === 'symptom' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      Symptom Checker
+                    </button>
+                  </div>
+                </div>
               </div>
 
+              {view === 'symptom' ? (
+                <SymptomChecker userId={userId} onComplete={handleSymptomComplete} />
+              ) : (
+                <>
               <div className="glass-panel p-2 rounded-2xl mb-8 flex overflow-x-auto hide-scrollbar space-x-2 border border-slate-700/50 shadow-2xl relative z-10">
                 {tabs.map((tab) => (
                   <button
@@ -188,6 +236,8 @@ const MainPredictor = () => {
                   </button>
                 </div>
               </motion.div>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

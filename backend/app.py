@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import requests
 import joblib
 import numpy as np
 import warnings
@@ -12,7 +13,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
+from dotenv import load_dotenv
+import google.generativeai as genai
+
 load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 app = Flask(__name__)
 CORS(app)
@@ -432,6 +437,230 @@ def predict():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/recommendations', methods=['POST'])
+def generate_recommendations():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        age = data.get("age", "Not specified")
+        gender = data.get("GENDER", data.get("sex", data.get("gender", "Not specified")))
+        bmi = data.get("bmi", "Not specified")
+        glucose = data.get("glucose", "Not specified")
+        bp = data.get("bp", "Not specified")
+        disease = data.get("disease", "Unknown")
+        risk = data.get("risk_percentage", "Unknown")
+        
+        prompt = f"""
+        You are an expert AI healthcare assistant specializing in preventive care and lifestyle planning.
+        Your task is to analyze the user's health data and generate a highly personalized, structured health improvement plan.
+
+        ------------------------
+        USER DATA:
+        Disease Context: {disease} Focus
+        Age: {age}
+        Gender: {gender}
+        BMI: {bmi}
+        Glucose Level: {glucose}
+        Blood Pressure: {bp}
+        Predicted Risk Severity: {risk}%
+        ------------------------
+
+        INSTRUCTIONS:
+        1. Analyze the user's condition carefully.
+        2. Provide ONLY practical, realistic, and safe recommendations.
+        3. Keep the tone clear, actionable, and concise (not too long).
+        4. Do NOT give generic advice — everything must be personalized.
+
+        OUTPUT FORMAT (STRICT JSON):
+        {{
+          "summary": "Short 2-3 line health summary explaining current condition",
+          "risk_explanation": ["Key reason 1", "Key reason 2", "Key reason 3"],
+          "lifestyle_changes": {{
+            "do": ["Things user should start doing"],
+            "dont": ["Things user should avoid"]
+          }},
+          "diet_plan": ["Food recommendation 1", "Food recommendation 2"],
+          "exercise_plan": ["Exercise 1 with duration", "Exercise 2 with duration"],
+          "daily_plan": {{
+            "morning": ["Morning activity"],
+            "afternoon": ["Afternoon activity"],
+            "evening": ["Evening activity"],
+            "night": ["Night routine"]
+          }},
+          "weekly_plan": [
+            {{ "day": "Monday", "plan": ["Tasks for the day"] }},
+            {{ "day": "Tuesday", "plan": ["Tasks for the day"] }}
+          ],
+          "warnings": ["Important health warning if any"]
+        }}
+        """
+
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json"
+            )
+        )
+        print(response)
+        return response.text, 200, {'Content-Type': 'application/json'}
+
+    except Exception as e:
+        print(f"Gemini API Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/nearby-hospitals', methods=['GET'])
+def get_nearby_hospitals():
+    try:
+        lat = request.args.get('lat')
+        lon = request.args.get('lon')
+        api_key = os.getenv("NEAREST_API_KEY")
+        
+        if not lat or not lon:
+            return jsonify({"error": "Latitude and longitude required"}), 400
+            
+        if not api_key:
+            return jsonify({"error": "LocationIQ API key not found in .env"}), 500
+
+        # LocationIQ Nearby API (using us1 endpoint)
+        url = f"https://us1.locationiq.com/v1/nearby?key={api_key}&lat={lat}&lon={lon}&tag=hospital&radius=10000&format=json"
+        
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+             return jsonify({"error": "LocationIQ API failure", "details": response.text}), response.status_code
+             
+        return jsonify(response.json())
+        
+    except Exception as e:
+        print(f"LocationIQ API Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+DISEASE_SYMPTOMS = [
+    {
+        "id": "diabetes",
+        "name": "Diabetes Mellitus",
+        "symptoms": [
+            {"id": "thirst", "name": "Excessive Thirst", "weight": 5, "desc": "Feeling very thirsty even after drinking water"},
+            {"id": "urination", "name": "Frequent Urination", "weight": 5, "desc": "Waking up often at night to urinate"},
+            {"id": "hunger", "name": "Extreme Hunger", "weight": 4, "desc": "Feeling hungry shortly after eating"},
+            {"id": "weight_loss", "name": "Unexplained Weight Loss", "weight": 4, "desc": "Losing weight without trying"},
+            {"id": "fatigue_d", "name": "Fatigue & Weakness", "weight": 2, "desc": "General lack of energy and stamina"},
+            {"id": "vision", "name": "Blurred Vision", "weight": 3, "desc": "Difficulty focusing visually"},
+            {"id": "slow_healing", "name": "Slow-healing Sores", "weight": 4, "desc": "Cuts or bruises that take a long time to heal"},
+            {"id": "dry_mouth", "name": "Dry Mouth & Itchy Skin", "weight": 3, "desc": "Persistent dryness in mouth and skin irritation"},
+            {"id": "numbness_d", "name": "Numbness in Extremities", "weight": 4, "desc": "Tingling or numbness in hands or feet"},
+            {"id": "infections_d", "name": "Frequent Infections", "weight": 3, "desc": "Gums, skin, or bladder infections occurring often"},
+            {"id": "fruity_breath", "name": "Fruit-smelling Breath", "weight": 5, "desc": "Sweet, fruity odor (Ketoacidosis sign)"},
+            {"id": "dark_skin", "name": "Darkened Skin Folds", "weight": 3, "desc": "Dark skin around neck or armpits"},
+            {"id": "yeast_inf", "name": "Frequent Yeast Infections", "weight": 3, "desc": "Indicative of high glucose levels"}
+        ]
+    },
+    {
+        "id": "heart_disease",
+        "name": "Heart & Vascular Disease",
+        "symptoms": [
+            {"id": "chest_pain", "name": "Chest Pain (Angina)", "weight": 5, "desc": "Pressure, tightness or squeezing in chest"},
+            {"id": "breath_h", "name": "Shortness of Breath", "weight": 5, "desc": "Hard to catch breath during activity or rest"},
+            {"id": "dizziness", "name": "Dizziness/Fainting", "weight": 3, "desc": "Feeling lightheaded or losing consciousness"},
+            {"id": "palpitations", "name": "Heart Palpitations", "weight": 4, "desc": "Heart is racing, skipping beats, or fluttering"},
+            {"id": "neck_pain", "name": "Upper Body Discomfort", "weight": 3, "desc": "Pain in neck, jaw, throat, or upper back"},
+            {"id": "numbness_s", "name": "Sudden Weakness/Numbness", "weight": 5, "desc": "Weakness especially in face, arm, or leg (one side)"},
+            {"id": "speech_diff", "name": "Speech Difficulty", "weight": 5, "desc": "Slurred speech or trouble understanding others"},
+            {"id": "fatigue_h", "name": "Extreme Fatigue", "weight": 4, "desc": "Feeling exhausted after simple tasks"},
+            {"id": "swelling", "name": "Leg/Ankle Swelling", "weight": 4, "desc": "Swelling (edema) in feet, ankles, or legs"},
+            {"id": "persistent_cough_h", "name": "Persistent Wheezing", "weight": 3, "desc": "Cough with white or pink-tinged mucus"},
+            {"id": "balance_s", "name": "Loss of Coordination", "weight": 4, "desc": "Sudden trouble walking or loss of balance"},
+            {"id": "headache_s", "name": "Severe Global Headache", "weight": 4, "desc": "Intense headache with no known trigger"},
+            {"id": "jaw_pain", "name": "Jaw/Teeth Pain", "weight": 4, "desc": "Radiating pain from chest to jaw"},
+            {"id": "sweating", "name": "Cold Sweats", "weight": 5, "desc": "Sudden, unexplained cold sweating"}
+         ]
+    },
+    {
+        "id": "lung_cancer",
+        "name": "Lung Cancer Risk",
+        "symptoms": [
+            {"id": "cough", "name": "Chronic Persistent Cough", "weight": 5, "desc": "A cough that does not go away or changes"},
+            {"id": "blood_cough", "name": "Coughing up Blood", "weight": 5, "desc": "Even small amounts of blood in phlegm"},
+            {"id": "chest_pain_c", "name": "Deep Chest Pain", "weight": 4, "desc": "Pain that worsens with deep breathing"},
+            {"id": "hoarseness", "name": "Voice Hoarseness", "weight": 3, "desc": "Voice sounds raspy, strained, or breathless"},
+            {"id": "weight_loss_c", "name": "Rapid Weight Loss", "weight": 5, "desc": "Significant weight loss unknowingly"},
+            {"id": "bone_pain", "name": "Bone or Joint Pain", "weight": 3, "desc": "Aching specifically in back or hips"},
+            {"id": "recurring_inf", "name": "Recurring Chest Infections", "weight": 4, "desc": "Pneumonia or bronchitis recurring"},
+            {"id": "wheezing_c", "name": "Unexplained Wheezing", "weight": 3, "desc": "Whistling sound when breathing"},
+            {"id": "shoulder_pain", "name": "Shoulder/Arm Pain", "weight": 3, "desc": "Persistent pain radiating to shoulder"},
+            {"id": "difficulty_swallow", "name": "Difficulty Swallowing", "weight": 4, "desc": "Pain or trouble when swallowing"},
+            {"id": "face_swelling", "name": "Facial/Neck Swelling", "weight": 4, "desc": "Swelling caused by blood vessel pressure"},
+            {"id": "finger_clubbing", "name": "Finger Clubbing", "weight": 2, "desc": "Tips of fingers become larger or curved"}
+        ]
+    }
+]
+
+@app.route('/api/analyze-symptoms', methods=['POST'])
+def analyze_symptoms():
+    try:
+        data = request.json
+        selected_ids = data.get('selected_symptoms', [])
+        user_id = data.get('user_id')
+        
+        results = []
+        
+        for d_info in DISEASE_SYMPTOMS:
+            d_key = d_info['id']
+            total_weight = sum(s['weight'] for s in d_info['symptoms'])
+            matched_weight = 0
+            matched_names = []
+            missing_names = []
+            
+            for s in d_info['symptoms']:
+                if s['id'] in selected_ids:
+                    # In a real app we'd get severity from frontend, here we default to 1.0
+                    matched_weight += s['weight']
+                    matched_names.append(s['name'])
+                else:
+                    if s['weight'] >= 4: # Only list missing "key" symptoms
+                        missing_names.append(s['name'])
+            
+            match_percentage = round((matched_weight / total_weight) * 100, 2)
+            
+            if match_percentage > 0:
+                results.append({
+                    "id": d_key,
+                    "name": d_info['name'],
+                    "probability": match_percentage,
+                    "risk_level": "High" if match_percentage > 70 else "Medium" if match_percentage > 30 else "Low",
+                    "matched_symptoms": matched_names,
+                    "matched_total_weight": matched_weight,
+                    "disease_total_weight": total_weight,
+                    "missing_key_symptoms": missing_names,
+                    "summary": f"Matched {len(matched_names)} symptoms with weighted score of {matched_weight} (Target: {total_weight})"
+                })
+        
+        # Sort by match percentage
+        results = sorted(results, key=lambda x: x['probability'], reverse=True)
+        
+        # Save to DB if user_id provided
+        if user_id and preds_col is not None:
+             preds_col.insert_one({
+                 "user_id": user_id,
+                 "type": "symptom_scan",
+                 "results": results,
+                 "selected_ids": selected_ids,
+                 "timestamp": datetime.now(timezone.utc).isoformat()
+             })
+             
+        return jsonify({
+            "success": True,
+            "results": results,
+            "symptom_library": DISEASE_SYMPTOMS # Send back for UI to display checkboxes
+        })
+        
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
