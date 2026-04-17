@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://127.0.0.1:5000';
+const API_URL = 'https://algowarriors.onrender.com';
 
 export const registerUser = async (username, password) => {
   try {
@@ -45,14 +45,14 @@ export const predictRisk = async (diseaseType, data, user_id = null) => {
       ...data
     };
     if (user_id) {
-        payload.user_id = user_id;
+      payload.user_id = user_id;
     }
     const response = await axios.post(`${API_URL}/predict`, payload);
     return response.data;
   } catch (error) {
     console.error("Error predicting risk:", error);
     if (error.response && error.response.data && error.response.data.error) {
-       throw new Error(error.response.data.error);
+      throw new Error(error.response.data.error);
     }
     throw new Error('Failed to connect to the prediction servers.');
   }
