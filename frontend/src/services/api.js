@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Support VITE_API_URL for local development while defaulting to production Render endpoint
-const API_URL = import.meta.env.VITE_API_URL || 'https://algowarriors.onrender.com';
+// Automatically point to local backend if running on localhost to avoid DNS resolution errors
+const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const API_URL = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:5000' : 'https://algowarriors.onrender.com');
 
 const formatError = (error, fallback) => {
   if (error.response?.data?.error) {
