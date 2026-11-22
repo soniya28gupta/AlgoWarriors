@@ -6,6 +6,8 @@ import numpy as np
 import warnings
 import os
 import uuid
+import sqlite3
+import json
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -26,16 +28,156 @@ app = Flask(__name__)
 # Enable CORS for all routes with support for credentials and headers
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# 🔹 MongoDB Connection Management with Dynamic Reconnect
+# ── SQLite Fallback Engine for Seamless Local & Zero-Config Deployment ──
+class SQLiteCollection:
+    def __init__(self, db_path, table_name):
+        self.db_path = db_path
+        self.table_name = table_name
+
+    def _get_conn(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def find_one(self, query):
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            if "username" in query:
+                uname = query["username"]
+                if isinstance(uname, dict) and "$regex" in uname:
+                    raw_val = uname["$regex"].strip("^$")
+                    cursor.execute(f"SELECT * FROM {self.table_name} WHERE LOWER(username) = LOWER(?)", (raw_val,))
+                else:
+                    cursor.execute(f"SELECT * FROM {self.table_name} WHERE LOWER(username) = LOWER(?)", (str(uname),))
+            elif "user_id" in query:
+                cursor.execute(f"SELECT * FROM {self.table_name} WHERE user_id = ?", (str(query["user_id"]),))
+            else:
+                return None
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                if "onboarding_data" in d and isinstance(d["onboarding_data"], str):
+                    try:
+                        d["onboarding_data"] = json.loads(d["onboarding_data"])
+                    except Exception:
+                        d["onboarding_data"] = {}
+                return d
+            return None
+        finally:
+            conn.close()
+
+    def insert_one(self, doc):
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            if self.table_name == "users":
+                onboarding = json.dumps(doc.get("onboarding_data", {}))
+                created_at = doc.get("created_at")
+                if isinstance(created_at, datetime):
+                    created_at = created_at.isoformat()
+                cursor.execute(
+                    "INSERT INTO users (user_id, username, password, onboarding_data, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (str(doc.get("user_id")), str(doc.get("username")), str(doc.get("password")), onboarding, str(created_at))
+                )
+            elif self.table_name == "predictions":
+                inputs = json.dumps(doc.get("inputs", {}))
+                care_plan = json.dumps(doc.get("care_plan", {}))
+                cursor.execute(
+                    "INSERT INTO predictions (user_id, disease, inputs, risk_percentage, stroke_risk, care_plan, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (str(doc.get("user_id")), str(doc.get("disease", doc.get("type", ""))), inputs, doc.get("risk_percentage"), doc.get("stroke_risk"), care_plan, str(doc.get("timestamp")))
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def update_one(self, filter_query, update_doc):
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            user_id = filter_query.get("user_id")
+            if "$set" in update_doc and "onboarding_data" in update_doc["$set"]:
+                onboarding = json.dumps(update_doc["$set"]["onboarding_data"])
+                cursor.execute("UPDATE users SET onboarding_data = ? WHERE user_id = ?", (onboarding, str(user_id)))
+                conn.commit()
+        finally:
+            conn.close()
+
+    def find(self, query):
+        conn = self._get_conn()
+        cursor = conn.cursor()
+        try:
+            user_id = query.get("user_id")
+            cursor.execute(f"SELECT * FROM {self.table_name} WHERE user_id = ? ORDER BY id DESC", (str(user_id),))
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                item = dict(r)
+                item["_id"] = str(item.get("id", item.get("user_id")))
+                if "inputs" in item and isinstance(item["inputs"], str):
+                    try:
+                        item["inputs"] = json.loads(item["inputs"])
+                    except Exception:
+                        pass
+                if "care_plan" in item and isinstance(item["care_plan"], str):
+                    try:
+                        item["care_plan"] = json.loads(item["care_plan"])
+                    except Exception:
+                        pass
+                results.append(item)
+            class CursorWrapper:
+                def __init__(self, data):
+                    self.data = data
+                def sort(self, *args, **kwargs):
+                    return self.data
+                def __iter__(self):
+                    return iter(self.data)
+            return CursorWrapper(results)
+        finally:
+            conn.close()
+
+# 🔹 Database Connection Management with Dynamic Fallback
 client = None
 users_col = None
 preds_col = None
+
+def init_sqlite():
+    global users_col, preds_col
+    db_file = os.path.join(os.path.dirname(__file__), "neurahealth_local.db")
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT UNIQUE,
+            password TEXT,
+            onboarding_data TEXT,
+            created_at TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            disease TEXT,
+            inputs TEXT,
+            risk_percentage REAL,
+            stroke_risk REAL,
+            care_plan TEXT,
+            timestamp TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+    users_col = SQLiteCollection(db_file, "users")
+    preds_col = SQLiteCollection(db_file, "predictions")
+    print(f"Connected to local embedded database securely at {db_file}!")
+    return users_col, preds_col
 
 def init_db():
     global client, users_col, preds_col
     mongo_uri = os.getenv("MONGO_URI")
     if not mongo_uri:
-        print("WARNING: MONGO_URI not found in environment variables.")
         return False
     try:
         client = MongoClient(mongo_uri, serverSelectionTimeoutMS=4000)
@@ -51,8 +193,9 @@ def init_db():
         preds_col = None
         return False
 
-# Attempt initial startup connection
-init_db()
+# Attempt startup connection
+if not init_db():
+    init_sqlite()
 
 def get_db():
     global users_col, preds_col
@@ -60,7 +203,7 @@ def get_db():
         return users_col, preds_col
     if init_db():
         return users_col, preds_col
-    return None, None
+    return init_sqlite()
 
 def generate_token(user_id, username):
     """Generates an optional JWT token if JWT_SECRET is configured."""
@@ -235,10 +378,12 @@ def home():
 @app.route('/health', methods=['GET'])
 @app.route('/api/health', methods=['GET'])
 def health():
-    users_db, preds_db = get_db()
+    users_db, _ = get_db()
+    is_atlas = client is not None and users_col is not None and not isinstance(users_col, SQLiteCollection)
     return jsonify({
         "status": "healthy",
         "database_connected": users_db is not None,
+        "database_type": "MongoDB Atlas" if is_atlas else "Embedded SQLite",
         "models_loaded": {
             "diabetes": diabetes_model is not None,
             "heart": heart_model is not None,

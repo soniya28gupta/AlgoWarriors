@@ -351,6 +351,20 @@ export default function AuthPage({ onLoginSuccess }) {
                                 </>
                             )}
                         </motion.button>
+
+                        {/* Instant Demo Access Button */}
+                        <button
+                            type="button"
+                            onClick={() => onLoginSuccess('demo_guest_user', false)}
+                            className="w-full py-2.5 px-4 rounded-2xl text-xs font-semibold transition-all hover:opacity-85 mt-2 flex items-center justify-center gap-1.5"
+                            style={{
+                                color: C.green,
+                                backgroundColor: 'rgba(92,118,109,0.08)',
+                                border: `1px dashed ${C.green}`
+                            }}
+                        >
+                            ⚡ Instant Access (Demo / Guest Mode)
+                        </button>
                     </form>
 
                     {/* Divider */}
