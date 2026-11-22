@@ -5,13 +5,14 @@ import App from './App.jsx'
 
 // Clean development console output: suppress React DevTools download notification
 if (typeof window !== 'undefined') {
-  const origInfo = console.info;
-  console.info = (...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('React DevTools')) {
+  const filterDevTools = (origFn) => (...args) => {
+    if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('React DevTools')) {
       return;
     }
-    origInfo.apply(console, args);
+    origFn.apply(console, args);
   };
+  console.log = filterDevTools(console.log);
+  console.info = filterDevTools(console.info);
 }
 
 createRoot(document.getElementById('root')).render(
