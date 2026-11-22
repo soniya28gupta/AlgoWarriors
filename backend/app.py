@@ -6,37 +6,78 @@ import numpy as np
 import warnings
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
+import google.generativeai as genai
+import jwt
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from dotenv import load_dotenv
-import google.generativeai as genai
-
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Configure Gemini AI if key is present
+google_api_key = os.getenv("GOOGLE_API_KEY")
+if google_api_key:
+    genai.configure(api_key=google_api_key)
 
 app = Flask(__name__)
-CORS(app)
+# Enable CORS for all routes with support for credentials and headers
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# 🔹 MongoDB Setup
-MONGO_URI = os.getenv("MONGO_URI")
+# 🔹 MongoDB Connection Management with Dynamic Reconnect
+client = None
 users_col = None
 preds_col = None
-if MONGO_URI:
+
+def init_db():
+    global client, users_col, preds_col
+    mongo_uri = os.getenv("MONGO_URI")
+    if not mongo_uri:
+        print("WARNING: MONGO_URI not found in environment variables.")
+        return False
     try:
-        client = MongoClient(MONGO_URI)
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=4000)
         db = client['neurahealth']
         users_col = db['users']
         preds_col = db['predictions']
+        client.admin.command('ping')
         print("Connected to MongoDB Atlas securely!")
+        return True
     except Exception as e:
-        print(f"MongoDB Connection Failure: {e}")
-else:
-    print("WARNING: MONGO_URI not found in .env")
+        print(f"MongoDB Connection Warning: {e}")
+        users_col = None
+        preds_col = None
+        return False
+
+# Attempt initial startup connection
+init_db()
+
+def get_db():
+    global users_col, preds_col
+    if users_col is not None and preds_col is not None:
+        return users_col, preds_col
+    if init_db():
+        return users_col, preds_col
+    return None, None
+
+def generate_token(user_id, username):
+    """Generates an optional JWT token if JWT_SECRET is configured."""
+    jwt_secret = os.getenv("JWT_SECRET")
+    if not jwt_secret:
+        return None
+    try:
+        payload = {
+            "user_id": user_id,
+            "username": username,
+            "exp": datetime.now(timezone.utc) + timedelta(days=7),
+            "iat": datetime.now(timezone.utc)
+        }
+        return jwt.encode(payload, jwt_secret, algorithm="HS256")
+    except Exception as e:
+        print(f"JWT generation error: {e}")
+        return None
 
 # 🔹 Load models
 diabetes_model = joblib.load("models/diabetes_model.pkl")
@@ -191,74 +232,151 @@ def generate_care_plan(disease, data, risk_percentage, stroke_risk=None):
 def home():
     return "Backend Running"
 
+@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
+def health():
+    users_db, preds_db = get_db()
+    return jsonify({
+        "status": "healthy",
+        "database_connected": users_db is not None,
+        "models_loaded": {
+            "diabetes": diabetes_model is not None,
+            "heart": heart_model is not None,
+            "cancer": cancer_model is not None,
+            "stroke": stroke_model is not None
+        }
+    }), 200
+
 @app.route('/api/register', methods=['POST'])
 def register():
-    data = request.json
+    users_db, _ = get_db()
+    if users_db is None:
+        return jsonify({
+            "error": "Database not configured. Please ensure MONGO_URI is configured on Render and MongoDB Atlas allows connection."
+        }), 500
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Request body must be valid JSON"}), 400
+
     username = data.get('username')
     password = data.get('password')
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
-    if users_col is None:
-        return jsonify({"error": "Database not configured"}), 500
-    
-    existing = users_col.find_one({"username": username})
-    if existing:
-        return jsonify({"error": "Username already exists"}), 400
-    
-    user_id = str(uuid.uuid4())
-    hashed = generate_password_hash(password)
-    users_col.insert_one({
-        "user_id": user_id,
-        "username": username,
-        "password": hashed,
-        "created_at": datetime.now(timezone.utc)
-    })
-    return jsonify({"message": "Registration successful", "user_id": user_id})
+
+    username = str(username).strip()
+    if len(username) < 3:
+        return jsonify({"error": "Username must be at least 3 characters long"}), 400
+    if len(str(password)) < 6:
+        return jsonify({"error": "Password must be at least 6 characters long"}), 400
+
+    try:
+        existing = users_db.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+        if existing:
+            return jsonify({"error": "Username already exists"}), 400
+
+        user_id = str(uuid.uuid4())
+        hashed = generate_password_hash(str(password))
+        users_db.insert_one({
+            "user_id": user_id,
+            "username": username,
+            "password": hashed,
+            "created_at": datetime.now(timezone.utc)
+        })
+
+        token = generate_token(user_id, username)
+        payload = {
+            "message": "Registration successful",
+            "user_id": user_id
+        }
+        if token:
+            payload["token"] = token
+        return jsonify(payload), 201
+
+    except Exception as e:
+        print(f"Registration Error: {e}")
+        return jsonify({"error": "Failed to complete registration"}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.json
+    users_db, _ = get_db()
+    if users_db is None:
+        return jsonify({
+            "error": "Database not configured. Please ensure MONGO_URI is configured on Render and MongoDB Atlas allows connection."
+        }), 500
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Request body must be valid JSON"}), 400
+
     username = data.get('username')
     password = data.get('password')
-    if users_col is None:
-        return jsonify({"error": "Database not configured"}), 500
-        
-    user = users_col.find_one({"username": username})
-    if user and check_password_hash(user['password'], password):
-        return jsonify({"message": "Login successful", "user_id": user['user_id']})
-    return jsonify({"error": "Invalid credentials"}), 401
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    username = str(username).strip()
+
+    try:
+        user = users_db.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+        if user and check_password_hash(user['password'], str(password)):
+            user_id = user['user_id']
+            token = generate_token(user_id, user.get('username', username))
+            payload = {
+                "message": "Login successful",
+                "user_id": user_id
+            }
+            if token:
+                payload["token"] = token
+            return jsonify(payload), 200
+
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    except Exception as e:
+        print(f"Login Error: {e}")
+        return jsonify({"error": "Failed to process login"}), 500
 
 @app.route('/api/onboarding', methods=['POST'])
 def save_onboarding():
-    data = request.json
+    users_db, _ = get_db()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
     user_id = data.get('user_id')
-    if not user_id or users_col is None:
-        return jsonify({"error": "Invalid request"}), 400
-        
-    users_col.update_one(
-        {"user_id": user_id},
-        {"$set": {"onboarding_data": data.get('onboarding', {})}}
-    )
-    return jsonify({"message": "Onboarding saved successfully!"})
+    if not user_id or users_db is None:
+        return jsonify({"error": "Invalid request or database not connected"}), 400
+
+    try:
+        users_db.update_one(
+            {"user_id": user_id},
+            {"$set": {"onboarding_data": data.get('onboarding', {})}}
+        )
+        return jsonify({"message": "Onboarding saved successfully!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/history/<user_id>', methods=['GET'])
 def get_history(user_id):
-    if users_col is None or preds_col is None:
+    users_db, preds_db = get_db()
+    if users_db is None or preds_db is None:
         return jsonify({"error": "Database not configured"}), 500
-        
-    user = users_col.find_one({"user_id": user_id})
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-        
-    predictions = list(preds_col.find({"user_id": user_id}).sort("timestamp", -1))
-    for p in predictions:
-        p['_id'] = str(p['_id'])  # Convert ObjectId to string for JSON serialization
-        
-    return jsonify({
-        "username": user.get("username"),
-        "onboarding_data": user.get("onboarding_data", {}),
-        "history": predictions
-    })
+
+    try:
+        user = users_db.find_one({"user_id": user_id})
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        predictions = list(preds_db.find({"user_id": user_id}).sort("timestamp", -1))
+        for p in predictions:
+            p['_id'] = str(p['_id'])  # Convert ObjectId to string for JSON serialization
+
+        return jsonify({
+            "username": user.get("username"),
+            "onboarding_data": user.get("onboarding_data", {}),
+            "history": predictions
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -419,18 +537,22 @@ def predict():
         if stroke_risk_percentage is not None:
              out_json["stroke_risk"] = stroke_risk_percentage
              
-        # Save to MongoDB explicitly
+        # Save to MongoDB explicitly if connected
         user_id = data.get("user_id")
-        if user_id and preds_col is not None:
-             preds_col.insert_one({
-                 "user_id": user_id,
-                 "disease": disease,
-                 "inputs": data,
-                 "risk_percentage": risk,
-                 "stroke_risk": stroke_risk_percentage,
-                 "care_plan": personalized_care_plan,
-                 "timestamp": datetime.now(timezone.utc).isoformat()
-             })
+        _, preds_db = get_db()
+        if user_id and preds_db is not None:
+            try:
+                preds_db.insert_one({
+                    "user_id": user_id,
+                    "disease": disease,
+                    "inputs": data,
+                    "risk_percentage": risk,
+                    "stroke_risk": stroke_risk_percentage,
+                    "care_plan": personalized_care_plan,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            except Exception as e:
+                print(f"Prediction logging warning: {e}")
 
         return jsonify(out_json)
 
@@ -670,14 +792,19 @@ def analyze_symptoms():
         results = sorted(results, key=lambda x: x['probability'], reverse=True)
         
         # Save to DB if user_id provided
-        if user_id and preds_col is not None:
-             preds_col.insert_one({
-                 "user_id": user_id,
-                 "type": "symptom_scan",
-                 "results": results,
-                 "raw_selections": raw_selections,
-                 "timestamp": datetime.now(timezone.utc).isoformat()
-             })
+        if user_id:
+            _, preds_db = get_db()
+            if preds_db is not None:
+                try:
+                    preds_db.insert_one({
+                        "user_id": user_id,
+                        "type": "symptom_scan",
+                        "results": results,
+                        "raw_selections": raw_selections,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+                except Exception as e:
+                    print(f"Symptom log warning: {e}")
              
         return jsonify({
             "success": True,

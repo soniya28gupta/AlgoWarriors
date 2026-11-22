@@ -80,16 +80,29 @@ export default function AuthPage({ onLoginSuccess }) {
         setIsLoading(true);
         setSuccessMsg('');
         try {
+            const username = formData.username.trim();
+            const password = formData.password;
+            if (!username || !password) {
+                setError('Please fill in all required fields.');
+                setIsLoading(false);
+                return;
+            }
             if (isLogin) {
-                const data = await loginUser(formData.username, formData.password);
+                const data = await loginUser(username, password);
+                if (data.token) {
+                    localStorage.setItem('auth_token', data.token);
+                }
                 onLoginSuccess(data.user_id, false);
             } else {
-                const data = await registerUser(formData.username, formData.password);
+                const data = await registerUser(username, password);
+                if (data.token) {
+                    localStorage.setItem('auth_token', data.token);
+                }
                 setSuccessMsg('Account created! Setting up your profile…');
                 setTimeout(() => onLoginSuccess(data.user_id, true), 1500);
             }
         } catch (err) {
-            setError(err?.message || err || 'Something went wrong. Please try again.');
+            setError(typeof err === 'string' ? err : (err?.message || 'Something went wrong. Please try again.'));
         } finally {
             setIsLoading(false);
         }

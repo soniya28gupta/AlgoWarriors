@@ -3,8 +3,10 @@ flask-cors
 requests
 joblib
 numpy
-pymongo
+pymongo[srv]
+dnspython
 python-dotenv
 google-generativeai
 scikit-learn
 gunicorn
+pyjwt
