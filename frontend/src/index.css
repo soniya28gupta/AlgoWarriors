@@ -115,6 +115,18 @@ select {
   .neon-text-glow {
     text-shadow: 0 0 8px rgba(201, 153, 107, 0.4);
   }
+
+  /* Coral Onboarding Utilities */
+  .coral-gradient {
+    background: linear-gradient(135deg, #F47F6B 0%, #EA6D58 100%);
+  }
+
+  .neumorphic-card {
+    background-color: #FFFFFF;
+    border: 1px solid rgba(92, 79, 74, 0.08);
+    box-shadow: 0 20px 45px -15px rgba(92, 79, 74, 0.10), 0 0 0 1px rgba(92, 79, 74, 0.03);
+    border-radius: 28px;
+  }
 }
 
 /* Custom Scrollbar - Warm Theme */
